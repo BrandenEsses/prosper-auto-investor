@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cupcake"> <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Data Table - Current Notes</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            // Your custom Tailwind extensions here
+          }
+        },
+        plugins: [require("daisyui")],
+        daisyui: {
+          themes: ["cupcake", "light", "dark"], // Ensure "cupcake" is available
+          forcedTheme: "cupcake", // This ensures cupcake is the active theme for daisyUI components
+        },
+      }
+    </script>
+
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_paginate {
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
+        .dataTables_wrapper .dataTables_filter input {
+            @apply input input-bordered input-sm ml-2;
+        }
+        .dataTables_wrapper .dataTables_length select {
+            @apply select select-bordered select-sm ml-2;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            @apply btn btn-sm mx-0.5;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            @apply btn-active;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+            @apply btn-disabled;
+        }
+        table.dataTable thead th {
+            cursor: pointer;
+        }
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-base-200 min-h-screen flex flex-col">
+
+    <div class="navbar bg-base-100 shadow-md sticky top-0 z-50">
+      <div class="navbar-start">
+        <a href="/" class="btn btn-ghost text-xl">Note Data Viewer</a>
+      </div>
+      <div class="navbar-center hidden lg:flex">
+        </div>
+      <div class="navbar-end">
+        <ul class="menu menu-horizontal px-1">
+          <li><a href="/" class="btn btn-primary btn-sm md:btn-md">Home</a></li>
+          </ul>
+      </div>
+    </div>
+
+    <main class="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="bg-base-100 p-6 rounded-xl shadow-xl">
+            <h2 class="text-2xl font-semibold mb-6 text-center sm:text-left">Loan Details</h2>
+
+            {% if data and data.result %}
+            <div class="table-container">
+                <table id="interactiveTable" class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            {% if data.result|length > 0 %}
+                                {% for key in data.result[0].keys() %}
+                                    <th class="capitalize">{{ key.replace('_', ' ') }}</th>
+                                {% endfor %}
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data.result %}
+                        <tr>
+                            {% for value in item.values() %}
+                                <td class="text-sm">
+                                    {% if value is boolean %}
+                                        {{ 'Yes' if value else 'No' }}
+                                    {% elif value == "Unspecified" or value == None %}
+                                        <span class="text-gray-400 italic">N/A</span>
+                                    {% else %}
+                                        {{ value }}
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-10">
+                <p class="text-xl text-gray-500">No data available to display.</p>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <footer class="footer footer-center p-4 bg-base-300 text-base-content">
+      <aside>
+        <p>Copyright © {{ now().year if now else '2025' }} - All right reserved by Your Company</p>
+      </aside>
+    </footer>
+
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    $('#interactiveTable').DataTable({
+        responsive: true,
+        language: {
+            search: "",
+            searchPlaceholder: "Search records...",
+            lengthMenu: "Show _MENU_ entries"
+        }
+    });
+    // Theme switcher JavaScript has been removed.
+});
+</script>
+
+</body>
+</html>
