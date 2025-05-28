@@ -2,7 +2,7 @@
 <html lang="en" data-theme="cupcake"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome - Loan Data Viewer</title>
+    <title>Welcome</title>
     
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -34,13 +34,13 @@
 <body class="bg-base-200 min-h-screen flex flex-col">
 
     <div class="navbar bg-base-100 shadow-md sticky top-0 z-50"> <div class="navbar-start">
-        <a href="/" class="btn btn-ghost text-xl">Loan Data Viewer</a>
+        <a href="/" class="btn btn-ghost text-xl">Owned Notes Viewer</a>
       </div>
       <div class="navbar-center hidden lg:flex">
         </div>
       <div class="navbar-end">
         <ul class="menu menu-horizontal px-1">
-          <li><a href="/" class="btn btn-ghost">Current Notes</a></li>
+          <li><a href="/" class="btn btn-ghost">Owned Notes</a></li>
           </ul>
       </div>
     </div>
@@ -50,10 +50,9 @@
                 <div class="max-w-md">
                     <h1 class="text-5xl font-bold text-primary">Welcome!</h1>
                     <p class="py-6 text-lg">
-                        Manage and view your loan note data efficiently.
-                        Navigate to "Current Notes" to see detailed information in an interactive table.
+                        View notes you own
                     </p>
-                    <a href="/notes" class="btn btn-primary">View Current Notes</a>
+                    <a href="/notes" class="btn btn-primary">View Owned Notes</a>
                 </div>
             </div>
         </div>
@@ -62,7 +61,7 @@
 
     <footer class="footer footer-center p-4 bg-base-300 text-base-content">
       <aside>
-        <p>Copyright © {{ now().year if now else '2025' }} - All right reserved by Your Company</p>
+        <p>Here is a footer if we need it</p>
       </aside>
     </footer>
 
