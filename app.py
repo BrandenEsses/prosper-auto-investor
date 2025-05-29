@@ -34,6 +34,13 @@ def get_notes():
     response_data = json.loads(response.text)
     return response_data
 
+def get_listings():
+    url = "https://api.prosper.com/listingsvc/v2/listings/?biddable=true&invested=false"
+    headers = { 'authorization': f"bearer {access_token}", 'accept': "application/json", 'timezone' : "America/Denver" }
+    response = requests.request("GET", url, headers=headers)
+    response_data = json.loads(response.text)
+    return response_data
+
 def create_app():
     app = Flask(__name__)
     with app.app_context():
@@ -51,10 +58,7 @@ def notes():
     current_notes = get_notes()
     return render_template("notes.html", data = current_notes)
 
-# @app.route("/refresh")
-# def refresh():
-#     return refresh_prosper_token()
-
-# @app.route("/notes")
-# def listings():
-#     return get_listings()
+@app.route("/listings")
+def listings():
+    current_listings = get_listings()
+    return render_template("listings.html", data = current_listings)

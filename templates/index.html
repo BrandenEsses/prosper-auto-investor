@@ -1,69 +1,23 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="cupcake"> <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
-    
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      // Optional: Customize Tailwind configuration if needed for other pages, but for this page, theme is fixed.
-      tailwind.config = {
-        theme: {
-          extend: {
-            // Your custom Tailwind extensions here
-          }
-        },
-        plugins: [require("daisyui")],
-        daisyui: {
-          themes: ["cupcake", "light", "dark"], // Ensure "cupcake" is available, can list others
-          forcedTheme: "cupcake", // This ensures cupcake is the active theme
-        },
-      }
-    </script>
-    
-    <style>
-        body {
-            font-family: 'Inter', sans-serif; /* Modern sans-serif font */
-        }
-    </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body class="bg-base-200 min-h-screen flex flex-col">
+{% extends "page.html" %}
 
-    <div class="navbar bg-base-100 shadow-md sticky top-0 z-50"> <div class="navbar-start">
-        <a href="/" class="btn btn-ghost text-xl">Prosper Auto Investor</a>
-      </div>
-      <div class="navbar-center hidden lg:flex">
-        </div>
-      <div class="navbar-end">
-        <ul class="menu menu-horizontal px-1">
-          <li><a href="/" class="btn btn-ghost">Owned Notes</a></li>
-          </ul>
-      </div>
-    </div>
+{% block title %}Welcome - Loan Data Viewer{% endblock %}
 
-    <main class="flex-grow">
-        <div class="hero min-h-[calc(100vh-10rem)] bg-base-100"> <div class="hero-content text-center">
-                <div class="max-w-md">
-                    <h1 class="text-5xl font-bold text-primary">Welcome!</h1>
-                    <p class="py-6 text-lg">
-                        View notes you own
-                    </p>
-                    <a href="/notes" class="btn btn-primary">View Owned Notes</a>
+{% block content %}
+<main class="flex-grow"> {# Add flex-grow here if not in base and needed #}
+    <div class="hero min-h-[calc(100vh-10rem)] bg-base-100">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <h1 class="text-5xl font-bold text-primary">Welcome!</h1>
+                <p class="py-6 text-lg">
+                    Manage and view your loan note data efficiently.
+                    Navigate to see detailed information.
+                </p>
+                <div class="space-x-2">
+                    <a href="/notes" class="btn btn-primary">View Current Notes</a>
+                    <a href="/available-listings" class="btn btn-secondary">View Available Listings</a>
                 </div>
             </div>
         </div>
-        
-        </main>
-
-    <footer class="footer footer-center p-4 bg-base-300 text-base-content">
-      <aside>
-        <p>Here is a footer if we need it</p>
-      </aside>
-    </footer>
-
-</body>
-</html>
+    </div>
+</main>
+{% endblock %}

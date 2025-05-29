@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cupcake">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Prosper Auto Investor{% endblock %}</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            keyframes: { fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } } },
+            animation: { fadeIn: 'fadeIn 0.3s ease-out' }
+          }
+        },
+        daisyui: { 
+          themes: ["cupcake", "light", "dark"],
+          forcedTheme: "cupcake", 
+        },
+      }
+    </script>
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+        }
+        /* Add any other TRULY global styles here if needed */
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    {% block head_extra %}{# For page-specific CSS links or inline styles #}{% endblock %}
+</head>
+<body class="bg-base-200 min-h-screen flex flex-col">
+
+    <div class="navbar bg-base-100 shadow-md sticky top-0 z-50">
+      <div class="navbar-start">
+        {# The 'active_page' == 'home' check is implicitly handled by being on '/' for the brand link #}
+        <a href="/" class="btn btn-ghost text-xl">Prosper Auto Investor</a>
+      </div>
+      <div class="navbar-end">
+        <ul class="menu menu-horizontal px-1">
+          <li><a href="/notes" class="btn btn-sm md:btn-md {{ 'btn-primary' if active_page == 'notes' else 'btn-ghost' }}">Current Notes</a></li>
+          <li><a href="/listings" class="btn btn-sm md:btn-md {{ 'btn-primary' if active_page == 'listings' else 'btn-ghost' }}">Available Listings</a></li>
+        </ul>
+      </div>
+    </div>
+
+    {# Removed default container from base to allow full-width hero on home page if needed #}
+    {% block content %}{% endblock %}
+
+    <footer class="footer footer-center p-4 bg-base-300 text-base-content mt-auto"> {# mt-auto to push footer down #}
+      <aside><p>Here is a footer in case we want to put something here.</p></aside>
+    </footer>
+
+    {% block scripts_before_main %}{# For scripts like jQuery if needed by main page scripts #}{% endblock %}
+    {% block scripts %}{# For page-specific JS files or inline scripts #}{% endblock %}
+</body>
+</html>
