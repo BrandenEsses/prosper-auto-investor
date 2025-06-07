@@ -1,0 +1,289 @@
+{% extends "page.html" %}
+
+{% block title %}
+    {% if criteria %}Edit Strategy{% else %}New Strategy{% endif %} - Live Preview
+{% endblock %}
+
+{% block head_extra %}
+    <style>
+        .rating-badge { @apply badge badge-lg font-semibold text-base-content border-opacity-50; }
+        .rating-A { @apply badge-success bg-green-100 border-green-400 text-green-700; }
+        .rating-B { @apply badge-info bg-blue-100 border-blue-400 text-blue-700; }
+        .rating-C { @apply badge-warning bg-yellow-100 border-yellow-500 text-yellow-800; }
+        .rating-D { @apply bg-orange-100 border-orange-500 text-orange-700; }
+        .rating-E { @apply bg-red-100 border-red-500 text-red-700; }
+        .rating-default { @apply badge-ghost bg-gray-200 border-gray-400 text-gray-600; }
+        .listing-card-item { @apply animate-fadeIn; }
+        .criteria-form-section { @apply mb-6; }
+        .criteria-form-title { @apply text-lg font-semibold text-primary mb-3 pb-2 border-b border-base-300; }
+        .checkbox-grid { @apply grid grid-cols-2 gap-x-4 gap-y-2; }
+        .sticky-form { position: sticky; top: 5rem; max-height: calc(100vh - 6rem); overflow-y: auto; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<main class="container mx-auto p-2 sm:p-4 lg:p-6">
+    <div class="mb-6 mt-2">
+        <h1 class="text-3xl font-bold">{% if criteria %}Edit{% else %}New{% endif %} Investment Strategy</h1>
+        <p class="text-base-content/70">Adjust criteria on the left to see a live preview of matching loans on the right, then save your strategy.</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category if category != 'message' else 'info' }} shadow-lg mb-4">
+                <div> <span>{{ message }}</span> </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 lg:gap-8">
+        <aside class="lg:col-span-1 xl:col-span-1 mb-8 lg:mb-0">
+            <div class="sticky-form bg-base-100 p-4 rounded-xl shadow-xl">
+                <form id="liveCriteriaForm" method="POST">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="card-title">Strategy Settings</h2>
+                        <button type="reset" id="resetLiveFilters" class="btn btn-ghost btn-sm">Reset</button>
+                    </div>
+                    <div class="criteria-form-section">
+                        <div class="form-control w-full mb-2">
+                            <label class="label"><span class="label-text">Strategy Name</span></label>
+                            <input type="text" class="input input-bordered w-full" id="name" name="name"
+                                   value="{{ criteria.name if criteria else '' }}" required>
+                        </div>
+                        <div class="form-control w-full">
+                            <label class="label"><span class="label-text">Investment Amount per Note ($)</span></label>
+                            <input type="number" class="input input-bordered w-full" id="investment_amount" name="investment_amount"
+                                   value="{{ criteria.investment_amount if criteria else '25' }}" min="25" step="25" required>
+                        </div>
+                    </div>
+                    <div class="criteria-form-section">
+                        <h3 class="criteria-form-title">Prosper Rating</h3>
+                        <div class="checkbox-grid">
+                            {% set ratings = ['AA', 'A', 'B', 'C', 'D', 'E', 'HR'] %}
+                            {% for rating in ratings %}
+                            <div class="form-control">
+                                <label class="label cursor-pointer justify-start gap-3 p-1">
+                                    <input type="checkbox" class="checkbox checkbox-primary checkbox-sm" name="prosper_rating" value="{{ rating }}"
+                                           {% if criteria and rating in criteria_dict.get('prosper_rating', []) %}checked{% endif %}>
+                                    <span class="label-text">{{ rating }}</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="criteria-form-section">
+                        <h3 class="criteria-form-title">Credit Profile</h3>
+                        <div class="space-y-2">
+                             <div class="form-control">
+                                <label class="label py-1"><span class="label-text">FICO Score Range</span></label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" name="min_fico" placeholder="Min" class="input input-bordered input-sm w-full"
+                                           value="{{ criteria_dict.get('fico_score', {}).get('min', '') if criteria else '' }}">
+                                    <span>-</span>
+                                    <input type="number" name="max_fico" placeholder="Max" class="input input-bordered input-sm w-full"
+                                           value="{{ criteria_dict.get('fico_score', {}).get('max', '') if criteria else '' }}">
+                                </div>
+                            </div>
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text">Inquiries (Last 6 mo)</span></label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" name="min_inquiries_6mo" placeholder="Min" class="input input-bordered input-sm w-full">
+                                    <span>-</span>
+                                    <input type="number" name="max_inquiries_6mo" placeholder="Max" class="input input-bordered input-sm w-full">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="criteria-form-section">
+                        <h3 class="criteria-form-title">Employment</h3>
+                        <div class="form-control mb-4">
+                            <label class="label py-1"><span class="label-text">Months Employed</span></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" name="min_months_employed" placeholder="Min" class="input input-bordered input-sm w-full">
+                                <span>-</span>
+                                <input type="number" name="max_months_employed" placeholder="Max" class="input input-bordered input-sm w-full">
+                            </div>
+                        </div>
+                        <h4 class="text-sm font-medium mb-2">Employment Status</h4>
+                        <div class="checkbox-grid">
+                            {% set employment_statuses = ['Employed', 'Full-time', 'Self-employed', 'Retired', 'Other'] %}
+                            {% for status in employment_statuses %}
+                            <div class="form-control">
+                                <label class="label cursor-pointer justify-start gap-3 p-1">
+                                    <input type="checkbox" class="checkbox checkbox-primary checkbox-sm" name="employment_status" value="{{ status }}">
+                                    <span class="label-text">{{ status }}</span> 
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mt-8 pt-6 border-t border-base-300 space-y-4">
+                        <div class="form-control w-fit">
+                            <label class="label cursor-pointer gap-4">
+                                <span class="label-text font-semibold">Activate this Strategy</span> 
+                                <input type="checkbox" class="toggle toggle-success" id="active" name="active"
+                                       {% if criteria and criteria.active %}checked{% endif %}>
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">
+                            {% if criteria %}Update & Save Strategy{% else %}Save New Strategy{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </aside>
+
+        <section class="lg:col-span-2 xl:col-span-3">
+            <div class="flex justify-between items-center mb-4">
+                <p>Showing <strong id="resultsCount">0</strong> matching loans.</p>
+                <div>
+                    <label for="sortListings" class="label-text mr-2">Sort By:</label>
+                    <select id="sortListings" class="select select-bordered select-sm">
+                        <option value="creation_date_desc" selected>Date Listed (Newest)</option>
+                        <option value="yield_desc">Yield (High to Low)</option>
+                        </select>
+                </div>
+            </div>
+            <div id="listingsContainer" class="space-y-4">
+                {% if listings_data and listings_data.result %}
+                    {% for listing in listings_data.result %}
+                    <div class="listing-card-item bg-base-100 shadow-lg rounded-xl border-l-4 border-primary" 
+                         data-rating="{{ listing.prosper_rating|upper if listing.prosper_rating else '' }}"
+                         data-fico="{{ listing.credit_bureau_values_transunion_indexed.fico_score.split('-')[0]|trim if listing.credit_bureau_values_transunion_indexed and listing.credit_bureau_values_transunion_indexed.fico_score else 0 }}"
+                         data-inquiries6mo="{{ listing.credit_bureau_values_transunion_indexed.g980s_inquiries_in_the_last_6_months if listing.credit_bureau_values_transunion_indexed else 0 }}"
+                         data-monthsemployed="{{ listing.months_employed if listing.months_employed is number else -1 }}"
+                         data-employmentstatus="{{ listing.employment_status_description|e }}"
+                         data-yield="{{ listing.lender_yield }}"
+                         data-creationdate="{{ listing.listing_creation_date|e if listing.listing_creation_date else '1900-01-01' }}">
+                        {# Card content - same as before #}
+                         <div class="flex items-start space-x-3 md:space-x-4 p-3 md:p-4">
+                            <input type="radio" name="selected_listing_main_group" value="{{ listing.listing_number }}" class="radio radio-primary radio-sm sm:radio-md mt-3 md:mt-4 shrink-0">
+                            <div class="flex-grow collapse collapse-arrow min-w-0">
+                                <input type="checkbox" /> 
+                                <div class="collapse-title !p-0 !pr-8 md:!pr-10">
+                                    <div class="custom-collapse-title-grid py-1">
+                                        <div class="rating-badge rating-{{ listing.prosper_rating|upper if listing.prosper_rating else 'default' }}"> {{ listing.prosper_rating|upper if listing.prosper_rating else 'N/A' }} </div>
+                                        <div class="min-w-0">
+                                            <div class="flex flex-col text-sm"> <span class="font-semibold text-neutral-focus">Listed: {{ listing.listing_creation_date.split(' ')[0] if listing.listing_creation_date else 'N/A' }}</span> </div>
+                                            <div class="flex flex-col min-w-0"> <span class="font-semibold text-base md:text-lg text-neutral-focus truncate">${{ "%.2f"|format(listing.listing_amount) }}</span> <span class="text-xs text-gray-600 truncate">{{ listing.listing_title }}</span> {% if listing.invested %}<span class="text-xs text-primary-focus font-semibold">You've already invested</span>{% endif %} </div>
+                                            <div class="term-yield-md-stack flex flex-col lg:flex-row lg:items-center lg:space-x-4"> <div class="text-sm text-neutral-focus">{{ (listing.listing_term / 12)|int }} Years</div> <div class="text-sm font-semibold text-neutral-focus">{{ "%.2f%%"|format(listing.lender_yield * 100) }} Yield</div> </div>
+                                            <div class="w-full min-w-0"> <progress class="progress progress-accent w-full mb-1" value="{{ (listing.percent_funded * 100)|int }}" max="100"></progress> <div class="text-xs text-gray-600 flex justify-between flex-wrap"><span class="whitespace-nowrap">${{ "%.0f"|format(listing.amount_remaining) }} left</span></div> </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="collapse-content bg-base-200/60 p-3 md:p-4 !pb-2 rounded-b-lg -mt-1">
+                                    <div class="mt-4 flex justify-between items-center"> <span class="text-xs text-gray-400">Listing ID: {{ listing.listing_number }}</span> <button class="btn btn-link btn-primary btn-xs sm:btn-sm p-0">View Full Details</button> </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                <div id="noListingsMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;">
+                    <p class="text-xl text-gray-500">No listings match your criteria.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('liveCriteriaForm');
+    const sortSelect = document.getElementById('sortListings');
+    const listingsContainer = document.getElementById('listingsContainer');
+    const noResultsMessageEl = document.getElementById('noListingsMessage');
+    const resultsCountEl = document.getElementById('resultsCount');
+    const resetFiltersButton = document.getElementById('resetLiveFilters');
+
+    const originalListings = Array.from(listingsContainer.querySelectorAll('.listing-card-item'));
+
+    function applyFiltersAndSort() {
+        const formData = new FormData(form);
+        const criteria = {
+            prosper_rating: formData.getAll('prosper_rating'),
+            employment_status: formData.getAll('employment_status'),
+            min_fico: parseFloat(formData.get('min_fico')) || null,
+            max_fico: parseFloat(formData.get('max_fico')) || null,
+            min_inquiries_6mo: parseFloat(formData.get('min_inquiries_6mo')) || null,
+            max_inquiries_6mo: parseFloat(formData.get('max_inquiries_6mo')) || null,
+            min_months_employed: parseFloat(formData.get('min_months_employed')) || null,
+            max_months_employed: parseFloat(formData.get('max_months_employed')) || null,
+        };
+
+        const sortValue = sortSelect.value;
+        let items = Array.from(originalListings); 
+
+        items = items.filter(item => {
+            const data = item.dataset;
+            const ratingMatch = !criteria.prosper_rating.length || criteria.prosper_rating.includes(data.rating);
+            const employmentMatch = !criteria.employment_status.length || criteria.employment_status.includes(data.employmentstatus);
+            const fico = parseFloat(data.fico);
+            const ficoMatch = (!criteria.min_fico || fico >= criteria.min_fico) && (!criteria.max_fico || fico <= criteria.max_fico);
+            const inquiries = parseFloat(data.inquiries6mo);
+            const inquiriesMatch = (!criteria.min_inquiries_6mo || inquiries >= criteria.min_inquiries_6mo) && (!criteria.max_inquiries_6mo || inquiries <= criteria.max_inquiries_6mo);
+            const monthsEmployed = parseFloat(data.monthsemployed);
+            const monthsEmployedMatch = (!criteria.min_months_employed || monthsEmployed >= criteria.min_months_employed) && (!criteria.max_months_employed || monthsEmployed <= criteria.max_months_employed);
+            
+            return ratingMatch && employmentMatch && ficoMatch && inquiriesMatch && monthsEmployedMatch;
+        });
+
+        // Sorting logic remains the same proven logic
+        if (sortValue !== 'default') {
+             const parts = sortValue.split('_'); const order = parts.pop(); const keyString = parts.join('_');
+            let datasetAttr;
+            switch (keyString) {
+                case 'creation_date': datasetAttr = 'creationdate'; break;
+                case 'yield': datasetAttr = 'yield'; break;
+                // Add other cases as needed
+                default: datasetAttr = null; 
+            }
+            if(datasetAttr) {
+                items.sort((a, b) => {
+                    let valA_raw = a.dataset[datasetAttr]; let valB_raw = b.dataset[datasetAttr];
+                    let valA, valB;
+                    if (datasetAttr === 'creationdate') {
+                        valA = new Date(valA_raw).getTime();
+                        valB = new Date(valB_raw).getTime();
+                    } else { valA = parseFloat(valA_raw); valB = parseFloat(valB_raw); }
+                    const isNaNA = isNaN(valA); const isNaNB = isNaN(valB);
+                    if (isNaNA && isNaNB) return 0; if (isNaNA) return 1; if (isNaNB) return -1; 
+                    let c = 0; if (valA < valB) c = -1; if (valA > valB) c = 1;
+                    return order === 'asc' ? c : -c;
+                });
+            }
+        }
+        
+        // --- CORRECTED DOM Update ---
+        // 1. Clear only the listing items, leaving the message element.
+        listingsContainer.querySelectorAll('.listing-card-item').forEach(node => node.remove());
+
+        // 2. Append the filtered and sorted items.
+        if (items.length > 0) {
+            items.forEach(itemToShow => listingsContainer.appendChild(itemToShow));
+            if (noResultsMessageEl) noResultsMessageEl.style.display = 'none';
+        } else {
+            if (noResultsMessageEl) noResultsMessageEl.style.display = 'block';
+        }
+
+        // 3. Update the count.
+        resultsCountEl.textContent = items.length;
+    }
+
+    form.addEventListener('input', applyFiltersAndSort);
+    form.addEventListener('change', applyFiltersAndSort);
+    sortSelect.addEventListener('change', applyFiltersAndSort);
+    resetFiltersButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        form.reset();
+        applyFiltersAndSort();
+    });
+
+    applyFiltersAndSort();
+});
+</script>
+{% endblock %}
