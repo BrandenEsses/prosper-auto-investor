@@ -7,25 +7,21 @@ from flask_apscheduler import APScheduler
 # Import from your models.py file
 from models import db, InvestmentCriteria, AvailableListing, OwnedNote, to_nullable_int, to_nullable_float
 
-# Your config variables will be loaded via app.config.from_pyfile()
-# but we can import them here if they are needed at the global scope.
-# For this structure, they are only needed inside functions that have app_context.
-from config import PROSPER_CLIENT_ID, PROSPER_CLIENT_SECRET, PROSPER_USERNAME, PROSPER_PASSWORD
+# Imports configuration variables like SECRET_KEY, PROSPER_CLIENT_ID, etc.
+from config import *
 
 # --- Global Token Variables ---
-# These are managed by the functions below. Be aware that this approach is not ideal
-# for multi-process production servers, but works for single-process setups.
 access_token = None
 refresh_token = None
 
-# Initialize extensions without an app instance
+# Initialize extensions
 scheduler = APScheduler()
 
-# --- API Communication Functions ---
-# (Your original functions, with added error handling)
+
+# --- API Communication & Background Job Functions ---
 
 def get_prosper_token():
-    """Gets the initial access and refresh tokens."""
+    """Gets the initial access and refresh tokens from Prosper."""
     global access_token, refresh_token
     print("Attempting to get initial Prosper token...")
     url = "https://api.prosper.com/v1/security/oauth/token"
@@ -44,12 +40,12 @@ def get_prosper_token():
         return None
 
 def refresh_prosper_token():
-    """Refreshes the access token using the refresh token."""
+    """Refreshes the access token using the stored refresh token."""
     global access_token, refresh_token
     print("--- Background Job: Refreshing Prosper token... ---")
     if not refresh_token:
-        print("--- CRITICAL: No refresh token available. Cannot refresh. ---")
-        return False
+        print("--- CRITICAL: No refresh token available. Attempting to get a new one. ---")
+        return get_prosper_token() is not None
         
     url = "https://api.prosper.com/v1/security/oauth/token"
     payload = f"grant_type=refresh_token&client_id={PROSPER_CLIENT_ID}&client_secret={PROSPER_CLIENT_SECRET}&refresh_token={refresh_token}"
@@ -63,7 +59,7 @@ def refresh_prosper_token():
         print("--- Token refreshed successfully. ---")
         return True
     except requests.exceptions.RequestException as e:
-        print(f"--- CRITICAL: Token refresh failed: {e} ---")
+        print(f"--- CRITICAL: Token refresh failed: {e}. A new token will be attempted on the next cycle. ---")
         return False
 
 def get_notes():
@@ -76,8 +72,9 @@ def get_notes():
         response = requests.request("GET", url, headers=headers)
         response.raise_for_status()
         response_data = response.json()
-        print(f"--- Found {len(response_data.get('result', []))} owned notes from API. ---")
-        return response_data.get('result', [])
+        result_list = response_data.get('result', [])
+        print(f"--- Found {len(result_list)} owned notes from API. ---")
+        return result_list
     except requests.exceptions.RequestException as e:
         print(f"--- ERROR fetching notes: {e} ---")
         return []
@@ -92,52 +89,44 @@ def get_listings():
         response = requests.request("GET", url, headers=headers)
         response.raise_for_status()
         response_data = response.json()
-        print(f"--- Found {len(response_data.get('result', []))} listings from API. ---")
-        return response_data.get('result', [])
+        result_list = response_data.get('result', [])
+        print(f"--- Found {len(result_list)} listings from API. ---")
+        return result_list
     except requests.exceptions.RequestException as e:
         print(f"--- ERROR fetching listings: {e} ---")
         return []
 
-# --- Background Job Definition ---
 def perform_hourly_update(app):
     """The function executed by the scheduler to refresh data and cache it."""
     with app.app_context():
-        print(f"--- Running hourly update job at {datetime.now()} ---")
+        print(f"--- Running data update job at {datetime.now()} ---")
+        if not refresh_prosper_token(): return
         
-        if not refresh_prosper_token():
-            return # Abort if token refresh fails
-
-        # Update Available Listings in DB
         new_listings = get_listings()
         if new_listings:
             try:
                 db.session.query(AvailableListing).delete()
-                print(f"Cleared old listings from cache.")
                 for listing_json in new_listings:
-                    listing_obj = AvailableListing(listing_number=listing_json['listing_number'], listing_data=listing_json)
-                    db.session.add(listing_obj)
+                    db.session.add(AvailableListing(listing_number=listing_json['listing_number'], listing_data=listing_json))
                 db.session.commit()
                 print(f"Successfully cached {len(new_listings)} new listings.")
             except Exception as e:
-                db.session.rollback()
-                print(f"--- DATABASE ERROR caching listings: {e} ---")
+                db.session.rollback(); print(f"--- DATABASE ERROR caching listings: {e} ---")
 
-        # Update Owned Notes in DB
         new_notes = get_notes()
         if new_notes:
             try:
                 db.session.query(OwnedNote).delete()
-                print(f"Cleared old notes from cache.")
                 for note_json in new_notes:
-                    note_obj = OwnedNote(loan_note_id=note_json['loan_note_id'], note_data=note_json)
-                    db.session.add(note_obj)
+                    db.session.add(OwnedNote(loan_note_id=note_json['loan_note_id'], note_data=note_json))
                 db.session.commit()
                 print(f"Successfully cached {len(new_notes)} new notes.")
             except Exception as e:
-                db.session.rollback()
-                print(f"--- DATABASE ERROR caching notes: {e} ---")
+                db.session.rollback(); print(f"--- DATABASE ERROR caching notes: {e} ---")
+
 
 # --- Application Factory ---
+
 def create_app():
     app = Flask(__name__)
     app.config.from_pyfile('config.py')
@@ -145,186 +134,110 @@ def create_app():
     db.init_app(app)
     scheduler.init_app(app)
 
-    with app.app_context():
-        db.create_all()
-        get_prosper_token()
-        
-        if not AvailableListing.query.first():
-            print("Listing cache is empty. Running initial data fetch...")
-            perform_hourly_update(app)
-
-        if not scheduler.get_job('hourly-update'):
-            scheduler.add_job(
-                id='hourly-update',
-                func=lambda: perform_hourly_update(app),
-                trigger='interval',
-                seconds=3540,
-                replace_existing=True
-            )
-            print("Scheduled hourly data refresh job.")
-
-    scheduler.start(paused=app.config.get('TESTING', False)) # Don't start scheduler during testing
-    return app
-
-def create_app():
-    app = Flask(__name__)
-    app.config.from_pyfile('config.py')
+    # All app-dependent logic is now defined inside the factory
     
-    # Initialize extensions
-    db.init_app(app)
-    scheduler.init_app(app)
-
     with app.app_context():
-        # Ensure all tables exist
         db.create_all()
-        
-        # Always get the initial API token on startup
-        print("Getting initial Prosper token...")
         get_prosper_token()
-        
-        # --- MODIFIED BEHAVIOR ---
-        # The 'if' condition has been removed. This will now run on every startup.
         print("Running data fetch on application startup...")
         perform_hourly_update(app)
-
-        # Schedule the recurring job if it doesn't exist
         if not scheduler.get_job('hourly-update'):
-            scheduler.add_job(
-                id='hourly-update',
-                func=lambda: perform_hourly_update(app),
-                trigger='interval',
-                seconds=3540,
-                replace_existing=True
-            )
+            scheduler.add_job(id='hourly-update', func=lambda: perform_hourly_update(app), trigger='interval', seconds=3540)
             print("Scheduled hourly data refresh job.")
 
-    # Start the background scheduler
     scheduler.start(paused=app.config.get('TESTING', False))
     return app
 
-# --- Create App Instance and Define Routes ---
+
+# --- Create App Instance ---
 app = create_app()
 
-@app.route("/")
-def index():
-    return render_template("index.html", active_page='home') # Assuming you have home.html
 
-@app.route("/notes")
-def notes():
-    """UPDATED: Fetches owned notes from the database cache."""
-    notes_from_db = OwnedNote.query.all()
-    current_notes = {"result": [note.note_data for note in notes_from_db]}
-    return render_template("notes.html", data=current_notes, active_page='notes')
+# --- Global Context Processor ---
 
-@app.route("/listings")
-def listings():
-    """UPDATED: Fetches available listings from the database cache."""
-    listings_from_db = AvailableListing.query.all()
-    current_listings = {"result": [listing.listing_data for listing in listings_from_db]}
-    return render_template("listings.html", data=current_listings, active_page='listings')
-
-@app.route('/strategies')
-def list_strategies():
-    """Displays a list of all saved investment strategies."""
-    all_strategies = InvestmentCriteria.query.order_by(InvestmentCriteria.name).all()
-    return render_template('strategy_list.html', strategies=all_strategies, active_page='strategies')
-
-@app.route('/strategy', defaults={'strategy_id': None}, methods=['GET', 'POST'])
-@app.route('/strategy/<int:strategy_id>', methods=['GET', 'POST'])
-def strategy_manager(strategy_id):
-    """
-    Manages creating and editing an investment strategy, with a live preview.
-    """
-    criteria_obj = None
-    if strategy_id:
-        # Fetch the existing strategy for editing.
-        criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id)
-
-    if request.method == 'POST':
-        is_new = criteria_obj is None
-        if is_new:
-            object_to_update = InvestmentCriteria()
-            db.session.add(object_to_update)
-            flash_message_verb = 'created'
-        else:
-            object_to_update = criteria_obj
-            flash_message_verb = 'updated'
-
-        # --- THIS IS THE FULLY CORRECTED LOGIC ---
-        # It populates ALL fields for both new and existing objects.
+@app.context_processor
+def inject_global_data():
+    """Makes variables available to all templates."""
+    last_refresh_timestamp = None
+    # Find the most recently cached listing to get the timestamp
+    latest_listing = AvailableListing.query.order_by(AvailableListing.cached_at.desc()).first()
+    if latest_listing:
+        # --- THIS IS THE FIX ---
+        # We append 'Z' to the ISO string to explicitly mark it as UTC for all browsers.
+        last_refresh_timestamp = latest_listing.cached_at.isoformat() + "Z"
         
-        # 1. Update top-level fields
-        object_to_update.name = request.form.get('name')
-        object_to_update.investment_amount = int(request.form.get('investment_amount', 25))
-        object_to_update.active = 'active' in request.form
-        
-        # 2. Build the complete JSON object for the 'filters' column
-        filters_dict = {
-            'prosper_rating': request.form.getlist('prosper_rating'),
-            'months_employed': {
-                'min': to_nullable_int(request.form.get('min_months_employed')),
-                'max': to_nullable_int(request.form.get('max_months_employed'))
-            },
-            'at09s': { # Trades opened in past 24 months
-                'min': to_nullable_int(request.form.get('min_at09s')),
-                'max': to_nullable_int(request.form.get('max_at09s'))
-            },
-            'g237s': { # Credit inquiries in past 6 months
-                'min': to_nullable_int(request.form.get('min_g237s')),
-                'max': to_nullable_int(request.form.get('max_g237s'))
-            },
-            'employment_status_description': request.form.getlist('employment_status'),
-            'listing_category_id': [int(val) for val in request.form.getlist('listing_category')],
-            'borrower_state': request.form.getlist('borrower_state'),
-            'amount_requested': {
-                'min': to_nullable_int(request.form.get('min_loan_amount')),
-                'max': to_nullable_int(request.form.get('max_loan_amount'))
-            },
-            'fico_score': {
-                'min': to_nullable_int(request.form.get('min_fico')),
-                'max': to_nullable_int(request.form.get('max_fico'))
-            },
-            'borrower_rate': {
-                'min': to_nullable_float(request.form.get('min_borrower_rate')) / 100.0 if request.form.get('min_borrower_rate') else None,
-                'max': to_nullable_float(request.form.get('max_borrower_rate')) / 100.0 if request.form.get('max_borrower_rate') else None
-            },
-            'occupation': request.form.getlist('occupation')
-        }
-        object_to_update.filters = filters_dict
-        
-        # 3. Commit the changes to the database. This is the "save" action.
-        db.session.commit()
-        
-        flash(f"Strategy '{object_to_update.name}' {flash_message_verb} successfully!", 'success')
-        
-        # Redirect back to the list page to see the changes.
-        return redirect(url_for('list_strategies'))
-
-    # --- GET request logic remains the same ---
-    listings_data = {"result": []}
-    try:
-        listings_from_db = AvailableListing.query.all()
-        listings_data = {"result": [listing.listing_data for listing in listings_from_db]}
-    except Exception as e:
-        print(f"Database query for listings failed: {e}")
-    
-    return render_template(
-        'strategy.html', 
-        listings_data=listings_data,
-        criteria=criteria_obj,
-        criteria_dict=criteria_obj.filters if criteria_obj else {},
-        active_page='strategies'
+    return dict(
+        now=datetime.utcnow, 
+        last_refresh_timestamp=last_refresh_timestamp
     )
 
-@app.route('/strategy/<int:strategy_id>/delete', methods=['POST'])
-def delete_strategy(strategy_id):
-    """Handles deleting a strategy."""
-    criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id)
-    db.session.delete(criteria_obj)
-    db.session.commit()
-    flash(f"Strategy '{criteria_obj.name}' has been deleted.", 'info')
-    return redirect(url_for('list_strategies'))
 
-# Main entry point for running the app directly
+# --- Define Routes within App Context ---
+with app.app_context():
+    @app.route("/")
+    def index():
+        return render_template("index.html", active_page='home') # UPDATED
+
+    @app.route("/notes")
+    def notes():
+        notes_from_db = OwnedNote.query.all()
+        current_notes = {"result": [note.note_data for note in notes_from_db]}
+        return render_template("notes.html", data=current_notes, active_page='notes') # UPDATED
+
+    @app.route("/listings")
+    def listings():
+        listings_from_db = AvailableListing.query.all()
+        current_listings = {"result": [listing.listing_data for listing in listings_from_db]}
+        return render_template("listings.html", data=current_listings, active_page='listings')
+
+    @app.route('/strategies')
+    def list_strategies():
+        all_strategies = InvestmentCriteria.query.order_by(InvestmentCriteria.name).all()
+        return render_template('strategy_list.html', strategies=all_strategies, active_page='strategies')
+
+    @app.route('/strategy', defaults={'strategy_id': None}, methods=['GET', 'POST'])
+    @app.route('/strategy/<int:strategy_id>', methods=['GET', 'POST'])
+    def strategy_manager(strategy_id):
+        criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id) if strategy_id else None
+        if request.method == 'POST':
+            is_new = criteria_obj is None
+            object_to_update = InvestmentCriteria() if is_new else criteria_obj
+            if is_new: db.session.add(object_to_update)
+            flash_message_verb = 'created' if is_new else 'updated'
+            
+            object_to_update.name = request.form.get('name')
+            object_to_update.investment_amount = int(request.form.get('investment_amount', 25))
+            object_to_update.active = 'active' in request.form
+            object_to_update.filters = {
+                'prosper_rating': request.form.getlist('prosper_rating'),
+                'months_employed': {'min': to_nullable_int(request.form.get('min_months_employed')),'max': to_nullable_int(request.form.get('max_months_employed'))},
+                'at09s': {'min': to_nullable_int(request.form.get('min_at09s')),'max': to_nullable_int(request.form.get('max_at09s'))},
+                'g237s': {'min': to_nullable_int(request.form.get('min_g237s')),'max': to_nullable_int(request.form.get('max_g237s'))},
+                'employment_status_description': request.form.getlist('employment_status'),
+                'listing_category_id': [int(val) for val in request.form.getlist('listing_category')],
+                'borrower_state': request.form.getlist('borrower_state'),
+                'amount_requested': {'min': to_nullable_int(request.form.get('min_loan_amount')),'max': to_nullable_int(request.form.get('max_loan_amount'))},
+                'fico_score': {'min': to_nullable_int(request.form.get('min_fico')),'max': to_nullable_int(request.form.get('max_fico'))},
+                'borrower_rate': {'min': to_nullable_float(request.form.get('min_rate')) / 100.0 if request.form.get('min_rate') else None,'max': to_nullable_float(request.form.get('max_rate')) / 100.0 if request.form.get('max_rate') else None},
+                'occupation': request.form.getlist('occupation')
+            }
+            db.session.commit()
+            flash(f"Strategy '{object_to_update.name}' {flash_message_verb} successfully!", 'success')
+            return redirect(url_for('list_strategies'))
+
+        listings_from_db = AvailableListing.query.all()
+        listings_data_for_template = {"result": [listing.listing_data for listing in listings_from_db]}
+        return render_template('strategy.html', listings_data=listings_data_for_template, criteria=criteria_obj, criteria_dict=criteria_obj.filters if criteria_obj else {}, active_page='strategies')
+
+    @app.route('/strategy/<int:strategy_id>/delete', methods=['POST'])
+    def delete_strategy(strategy_id):
+        criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id)
+        db.session.delete(criteria_obj)
+        db.session.commit()
+        flash(f"Strategy '{criteria_obj.name}' has been deleted.", 'info')
+        return redirect(url_for('list_strategies'))
+
+
+# Main entry point for running with `python app.py`
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
