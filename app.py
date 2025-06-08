@@ -232,22 +232,85 @@ def list_strategies():
 @app.route('/strategy', defaults={'strategy_id': None}, methods=['GET', 'POST'])
 @app.route('/strategy/<int:strategy_id>', methods=['GET', 'POST'])
 def strategy_manager(strategy_id):
-    """Manages creating and editing an investment strategy, with a live preview."""
+    """
+    Manages creating and editing an investment strategy, with a live preview.
+    """
     criteria_obj = None
     if strategy_id:
+        # Fetch the existing strategy for editing.
         criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id)
 
     if request.method == 'POST':
-        # ... (Your full POST logic for saving the strategy) ...
+        is_new = criteria_obj is None
+        if is_new:
+            object_to_update = InvestmentCriteria()
+            db.session.add(object_to_update)
+            flash_message_verb = 'created'
+        else:
+            object_to_update = criteria_obj
+            flash_message_verb = 'updated'
+
+        # --- THIS IS THE FULLY CORRECTED LOGIC ---
+        # It populates ALL fields for both new and existing objects.
+        
+        # 1. Update top-level fields
+        object_to_update.name = request.form.get('name')
+        object_to_update.investment_amount = int(request.form.get('investment_amount', 25))
+        object_to_update.active = 'active' in request.form
+        
+        # 2. Build the complete JSON object for the 'filters' column
+        filters_dict = {
+            'prosper_rating': request.form.getlist('prosper_rating'),
+            'months_employed': {
+                'min': to_nullable_int(request.form.get('min_months_employed')),
+                'max': to_nullable_int(request.form.get('max_months_employed'))
+            },
+            'at09s': { # Trades opened in past 24 months
+                'min': to_nullable_int(request.form.get('min_at09s')),
+                'max': to_nullable_int(request.form.get('max_at09s'))
+            },
+            'g237s': { # Credit inquiries in past 6 months
+                'min': to_nullable_int(request.form.get('min_g237s')),
+                'max': to_nullable_int(request.form.get('max_g237s'))
+            },
+            'employment_status_description': request.form.getlist('employment_status'),
+            'listing_category_id': [int(val) for val in request.form.getlist('listing_category')],
+            'borrower_state': request.form.getlist('borrower_state'),
+            'amount_requested': {
+                'min': to_nullable_int(request.form.get('min_loan_amount')),
+                'max': to_nullable_int(request.form.get('max_loan_amount'))
+            },
+            'fico_score': {
+                'min': to_nullable_int(request.form.get('min_fico')),
+                'max': to_nullable_int(request.form.get('max_fico'))
+            },
+            'borrower_rate': {
+                'min': to_nullable_float(request.form.get('min_borrower_rate')) / 100.0 if request.form.get('min_borrower_rate') else None,
+                'max': to_nullable_float(request.form.get('max_borrower_rate')) / 100.0 if request.form.get('max_borrower_rate') else None
+            },
+            'occupation': request.form.getlist('occupation')
+        }
+        object_to_update.filters = filters_dict
+        
+        # 3. Commit the changes to the database. This is the "save" action.
+        db.session.commit()
+        
+        flash(f"Strategy '{object_to_update.name}' {flash_message_verb} successfully!", 'success')
+        
+        # Redirect back to the list page to see the changes.
         return redirect(url_for('list_strategies'))
 
-    # For GET requests, load listings for the live preview from our database cache
-    listings_from_db = AvailableListing.query.all()
-    listings_data_for_template = {"result": [listing.listing_data for listing in listings_from_db]}
+    # --- GET request logic remains the same ---
+    listings_data = {"result": []}
+    try:
+        listings_from_db = AvailableListing.query.all()
+        listings_data = {"result": [listing.listing_data for listing in listings_from_db]}
+    except Exception as e:
+        print(f"Database query for listings failed: {e}")
     
     return render_template(
         'strategy.html', 
-        listings_data=listings_data_for_template,
+        listings_data=listings_data,
         criteria=criteria_obj,
         criteria_dict=criteria_obj.filters if criteria_obj else {},
         active_page='strategies'
