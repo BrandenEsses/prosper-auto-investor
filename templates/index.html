@@ -3,19 +3,23 @@
 {% block title %}Welcome - Loan Data Viewer{% endblock %}
 
 {% block content %}
-<main class="flex-grow"> {# Add flex-grow here if not in base and needed #}
+<main class="flex-grow">
     <div class="hero min-h-[calc(100vh-10rem)] bg-base-100">
         <div class="hero-content text-center">
-            <div class="max-w-md">
-                <h1 class="text-5xl font-bold text-primary">Welcome!</h1>
+            <div class="max-w-lg"> {# Increased max-width slightly for better text flow #}
+                <h1 class="text-5xl font-bold">Automate Your Investments</h1>
                 <p class="py-6 text-lg">
-                    Manage and view your investments
+                    Analyze loan data, view your current notes, and create custom auto-invest strategies to build your portfolio.
                 </p>
-                <div class="space-x-2">
-                    <a href="/notes" class="btn btn-secondary">View Current Notes</a>
-                    <a href="/listings" class="btn btn-secondary">View Available Listings</a>
-                    <a href="/strategies" class="btn btn-secondary">Manage Strategies</a>
+                
+                {# --- CORRECTED BUTTON LAYOUT --- #}
+                {# This flex container will align buttons horizontally with a gap #}
+                <div class="flex flex-wrap justify-center items-center gap-4">
+                    <a href="/listings" class="btn btn-primary">View Listings</a>
+                    <a href="/notes" class="btn btn-secondary">My Notes</a>
+                    <a href="/strategies" class="btn btn-accent">Manage Strategies</a>
                 </div>
+
             </div>
         </div>
     </div>
