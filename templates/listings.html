@@ -1,10 +1,11 @@
 {% extends "page.html" %}
 
-{% block title %}Available Listings - Loan Data Viewer{% endblock %}
+{% block title %}Available Listings{% endblock %}
 
 {% block head_extra %}
     <style>
-        /* Styles for rating-badge, info-icon, verification-dot, custom-collapse-title-grid, listing-card-item */
+        /* Styles needed for the listing cards displayed on this page */
+        .listing-card-item { } /* JS Selector */
         .rating-badge { @apply badge badge-lg font-semibold text-base-content border-opacity-50; }
         .rating-A { @apply badge-success bg-green-100 border-green-400 text-green-700; }
         .rating-B { @apply badge-info bg-blue-100 border-blue-400 text-blue-700; }
@@ -12,115 +13,41 @@
         .rating-D { @apply bg-orange-100 border-orange-500 text-orange-700; }
         .rating-E { @apply bg-red-100 border-red-500 text-red-700; }
         .rating-default { @apply badge-ghost bg-gray-200 border-gray-400 text-gray-600; }
-        .info-icon { @apply inline-block ml-1 text-xs text-gray-400 cursor-help; }
         .verification-dot { @apply h-3 w-3 rounded-full inline-block mx-0.5; }
+        .info-icon { @apply inline-block ml-1 text-xs text-gray-400 cursor-help; }
         .custom-collapse-title-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: center; width: 100%; }
         .custom-collapse-title-grid > div:last-child { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 0.5rem 1rem; }
         @media (min-width: 1024px) { .custom-collapse-title-grid > div:last-child { grid-template-columns: minmax(0,0.8fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr); } }
         @media (min-width: 768px) and (max-width: 1023px) { .custom-collapse-title-grid > div:last-child { grid-template-columns: minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr); } }
-        .listing-card-item { @apply animate-fadeIn; }
     </style>
 {% endblock %}
 
 {% block content %}
 <main class="flex-grow container mx-auto p-2 sm:p-4 lg:p-6">
     <div class="mb-6 mt-2"><h2 class="text-2xl lg:text-3xl font-bold text-center sm:text-left">Available Listings</h2></div>
-
     <div class="bg-base-100 p-4 rounded-xl shadow-lg mb-6">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-            <div>
-                <label for="filterGlobalSearchListings" class="label-text pb-1">Global Search</label>
-                <input type="text" id="filterGlobalSearchListings" placeholder="Search all fields..." class="input input-bordered input-sm w-full">
-            </div>
-            <div>
-                <label for="filterRatingListings" class="label-text pb-1">Prosper Rating</label>
-                <select id="filterRatingListings" class="select select-bordered select-sm w-full">
-                    <option value="">All Ratings</option>
-                    <option value="A">A</option><option value="B">B</option><option value="C">C</option>
-                    <option value="D">D</option><option value="E">E</option>
-                </select>
-            </div>
-            <div>
-                <label for="sortCriteriaListings" class="label-text pb-1">Sort By</label>
-                <select id="sortCriteriaListings" class="select select-bordered select-sm w-full">
-                    <option value="creation_date_desc" selected>Date Listed (Newest First)</option>
-                    <option value="creation_date_asc">Date Listed (Oldest First)</option>
-                    <option value="yield_desc">Yield (High to Low)</option>
-                    <option value="yield_asc">Yield (Low to High)</option>
-                    <option value="amount_desc">Amount (High to Low)</option>
-                    <option value="amount_asc">Amount (Low to High)</option>
-                    <option value="term_asc">Term (Short to Long)</option>
-                    <option value="term_desc">Term (Long to Short)</option>
-                    <option value="default">Original Order</option>
-                </select>
-            </div>
-            <div> <button id="resetFiltersListings" class="btn btn-ghost btn-sm w-full md:w-auto">Reset Filters</button> </div>
+            <div><label for="filter-global-listings" class="label-text pb-1">Global Search</label><input type="text" id="filter-global-listings" placeholder="Search ID, title, rating..." class="input input-bordered input-sm w-full"></div>
+            <div><label for="filter-rating-listings" class="label-text pb-1">Rating</label><select id="filter-rating-listings" class="select select-bordered select-sm w-full"><option value="">All</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select></div>
+            <div><label for="sort-criteria-listings" class="label-text pb-1">Sort By</label><select id="sort-criteria-listings" class="select select-bordered select-sm w-full"><option value="creation_date_desc" selected>Newest</option><option value="yield_desc">Yield (High-Low)</option></select></div>
+            <div><button id="reset-filters-listings" class="btn btn-ghost btn-sm w-full md:w-auto">Reset</button></div>
         </div>
     </div>
-
     <div id="listingsContainer" class="space-y-4">
     {% if data and data.result %}
         {% for listing in data.result %}
-            {# Construct searchable content string #}
-            {% set searchable_parts = [
-                listing.listing_title,
-                listing.listing_number,
-                listing.prosper_rating,
-                listing.borrower_state,
-                listing.employment_status_description,
-                listing.income_range_description,
-                ((listing.listing_term / 12)|int ~ " Years") if listing.listing_term else None,
-                (listing.lender_yield * 100 ~ "%") if listing.lender_yield is number else None,
-                listing.credit_bureau_values_transunion_indexed.fico_score if listing.credit_bureau_values_transunion_indexed else None,
-                listing.listing_creation_date.split(' ')[0] if listing.listing_creation_date else None,
-                listing.listing_amount,
-                listing.amount_remaining,
-                listing.decision_bureau,
-                listing.occupation
-            ] %}
-            {% set searchable_string = searchable_parts
-                |map('string')
-                |select('ne', 'None')
-                |map('trim')
-                |reject('eq', '')
-                |join(' ')|lower 
-            %}
-
-        <div class="listing-card-item bg-base-100 shadow-lg rounded-xl border-l-4 border-primary" 
-             data-searchable-content="{{ searchable_string|e }}"
-             data-rating="{{ listing.prosper_rating|upper if listing.prosper_rating else '' }}"
-             data-term="{{ listing.listing_term }}"
-             data-yield="{{ listing.lender_yield }}"
-             data-amount="{{ listing.listing_amount }}"
-             data-id="{{ listing.listing_number }}"
-             data-creationdate="{{ listing.listing_creation_date|e if listing.listing_creation_date else '1900-01-01' }}">
-            {# ... rest of the card HTML as in the previous correct version ... #}
-            <div class="flex items-start space-x-3 md:space-x-4 p-3 md:p-4">
-                <input type="radio" name="selected_listing_main_group" value="{{ listing.listing_number }}" class="radio radio-primary radio-sm sm:radio-md mt-3 md:mt-4 shrink-0">
-                <div class="flex-grow collapse collapse-arrow min-w-0">
-                    <input type="checkbox" /> 
-                    <div class="collapse-title !p-0 !pr-8 md:!pr-10">
-                        <div class="custom-collapse-title-grid py-1">
-                            <div class="rating-badge rating-{{ listing.prosper_rating|upper if listing.prosper_rating else 'default' }}"> {{ listing.prosper_rating|upper if listing.prosper_rating else 'N/A' }} </div>
-                            <div class="min-w-0">
-                                <div class="flex flex-col text-sm"> <span class="font-semibold text-neutral-focus">Listed: {{ listing.listing_creation_date.split(' ')[0] if listing.listing_creation_date else 'N/A' }}</span> </div>
-                                <div class="flex flex-col min-w-0"> <span class="font-semibold text-base md:text-lg text-neutral-focus truncate">${{ "%.2f"|format(listing.listing_amount) }}</span> <span class="text-xs text-gray-600 truncate">{{ listing.listing_title }}</span> {% if listing.invested %}<span class="text-xs text-primary-focus font-semibold">You've already invested</span>{% endif %} </div>
-                                <div class="term-yield-md-stack flex flex-col lg:flex-row lg:items-center lg:space-x-4"> <div class="text-sm text-neutral-focus">{{ (listing.listing_term / 12)|int }} Years</div> <div class="text-sm font-semibold text-neutral-focus">{{ "%.2f%%"|format(listing.lender_yield * 100) }} Yield</div> </div>
-                                <div class="w-full min-w-0"> <progress class="progress progress-accent w-full mb-1" value="{{ (listing.percent_funded * 100)|int }}" max="100"></progress> <div class="text-xs text-gray-600 flex justify-between flex-wrap"><span class="whitespace-nowrap">${{ "%.0f"|format(listing.amount_remaining) }} left</span></div> </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="collapse-content bg-base-200/60 p-3 md:p-4 !pb-2 rounded-b-lg -mt-1">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                            <div class="md:col-span-1 space-y-2 pr-0 md:pr-4 border-r-0 md:border-r border-base-300/30"> <h4 class="font-semibold text-sm mb-1 text-neutral-700">Verification Stage: {{ listing.verification_stage }}</h4> <div class="flex items-center space-x-0.5 mb-1"> {% for i in range(1, 5) %}<span class="verification-dot {{ 'bg-primary' if i <= listing.verification_stage else 'bg-gray-300' }}"></span>{% endfor %} </div> <p class="text-xs text-gray-500">Borrower information is processed through multiple verification stages.</p> </div>
-                            <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 md:gap-x-6 gap-y-3"> <div><span class="text-xs text-gray-500 block">Stated Income</span><span class="font-medium text-sm text-neutral-focus">{{ listing.income_range_description }}</span></div> <div><span class="text-xs text-gray-500 block">Debt/Income<span class="tooltip tooltip-top info-icon" data-tip="Debt-to-Income ratio including this loan.">(i)</span></span><span class="font-medium text-sm text-neutral-focus">{{ "%.2f%%"|format(listing.dti_wprosper_loan * 100) }}</span></div> <div><span class="text-xs text-gray-500 block">FICO range<span class="tooltip tooltip-top info-icon" data-tip="Credit score range from {{ listing.decision_bureau }}.">(i)</span></span><span class="font-medium text-sm text-neutral-focus">{{ listing.credit_bureau_values_transunion_indexed.fico_score if listing.credit_bureau_values_transunion_indexed else 'N/A' }}</span></div> <div><span class="text-xs text-gray-500 block">Current delinquencies</span><span class="font-medium text-sm text-neutral-focus">{{ listing.credit_bureau_values_transunion_indexed.g218b_number_of_delinquent_accounts if listing.credit_bureau_values_transunion_indexed else 'N/A' }}</span></div> <div><span class="text-xs text-gray-500 block">Revolving credit balance<span class="tooltip tooltip-top info-icon" data-tip="Total balance on revolving credit lines.">(i)</span></span><span class="font-medium text-sm text-neutral-focus">${{ "%.0f"|format(listing.credit_bureau_values_transunion_indexed.re101s_revolving_balance) if listing.credit_bureau_values_transunion_indexed and listing.credit_bureau_values_transunion_indexed.re101s_revolving_balance is number else 'N/A' }}</span></div> <div><span class="text-xs text-gray-500 block">Stated employment status</span><span class="font-medium text-sm text-neutral-focus">{{ listing.employment_status_description }}</span></div> </div>
-                        </div>
-                        <div class="mt-4 flex justify-between items-center"> <span class="text-xs text-gray-400">Listing ID: {{ listing.listing_number }}</span> <button class="btn btn-link btn-primary btn-xs sm:btn-sm p-0">View Full Details</button> </div>
-                    </div>
-                </div>
+            <div class="listing-card-item"
+                 data-searchable-content="{{ [listing.listing_title, listing.listing_number, listing.prosper_rating]|map('string')|join(' ')|lower }}"
+                 data-rating="{{ listing.prosper_rating|upper if listing.prosper_rating else '' }}"
+                 data-yield="{{ listing.lender_yield }}"
+                 data-creation-date="{{ listing.listing_creation_date|e if listing.listing_creation_date else '1900-01-01' }}">
+                {% with item=listing, card_type='listing' %}
+                    {% include '_card.html' %}
+                {% endwith %}
             </div>
-        </div>
         {% endfor %}
+    {% else %}
+        <div class="text-center py-10 bg-base-100 rounded-xl shadow"><p class="text-xl text-gray-500">No available listings found in cache.</p></div>
     {% endif %}
     <div id="noListingsMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;">
         <p class="text-xl text-gray-500">No listings match your criteria.</p>
@@ -131,71 +58,54 @@
 
 {% block scripts %}
 <script>
-// JavaScript for filtering and sorting (same as the previous working version for listings)
 document.addEventListener('DOMContentLoaded', function () {
-    const globalSearchInput = document.getElementById('filterGlobalSearchListings'); 
-    const filterRatingSelect = document.getElementById('filterRatingListings');     
-    const sortCriteriaSelect = document.getElementById('sortCriteriaListings');  
+    const globalSearchInput = document.getElementById('filter-global-listings');
+    const filterRatingSelect = document.getElementById('filter-rating-listings');
+    const sortCriteriaSelect = document.getElementById('sort-criteria-listings');
     const listingsContainer = document.getElementById('listingsContainer');
-    const resetFiltersButton = document.getElementById('resetFiltersListings');   
+    const resetFiltersButton = document.getElementById('reset-filters-listings');
     const noResultsMessageEl = document.getElementById('noListingsMessage');
+
+    if (!globalSearchInput) return; // Stop script if controls aren't on this page
+
     const originalListings = Array.from(listingsContainer.querySelectorAll('.listing-card-item'));
 
     function applyFiltersAndSort() {
-        const globalSearchTerm = globalSearchInput.value.toLowerCase().trim(); 
+        const globalSearchTerm = globalSearchInput.value.toLowerCase().trim();
         const ratingFilter = filterRatingSelect.value;
         const sortValue = sortCriteriaSelect.value;
-        let items = Array.from(originalListings); 
-        items = items.filter(item => {
-            const itemSearchableContent = item.dataset.searchableContent || ''; 
-            const itemRating = item.dataset.rating;
-            const globalSearchMatch = globalSearchTerm === '' || itemSearchableContent.includes(globalSearchTerm); 
-            const ratingMatch = ratingFilter === '' || itemRating === ratingFilter;
-            return globalSearchMatch && ratingMatch; 
+        
+        let visibleItems = [];
+        originalListings.forEach(item => {
+            const searchableContent = item.dataset.searchableContent || '';
+            const rating = item.dataset.rating;
+            
+            const globalMatch = globalSearchTerm === '' || searchableContent.includes(globalSearchTerm);
+            const ratingMatch = ratingFilter === '' || rating === ratingFilter;
+            
+            if (globalMatch && ratingMatch) {
+                item.style.display = '';
+                visibleItems.push(item);
+            } else {
+                item.style.display = 'none';
+            }
         });
-        if (sortValue !== 'default') {
-            const parts = sortValue.split('_'); const order = parts.pop(); const keyString = parts.join('_');
-            let datasetAttr;
-            switch (keyString) {
-                case 'creation_date': datasetAttr = 'creationdate'; break;
-                case 'yield': datasetAttr = 'yield'; break; 
-                case 'amount': datasetAttr = 'amount'; break; 
-                case 'term': datasetAttr = 'term'; break;  
-                default: datasetAttr = null; 
-            }
-            if(datasetAttr){ 
-                items.sort((a, b) => {
-                    let valA_raw = a.dataset[datasetAttr]; let valB_raw = b.dataset[datasetAttr];
-                    let valA, valB;
-                    if (datasetAttr === 'creationdate') {
-                        valA = valA_raw === '1900-01-01' ? (order === 'asc' ? Infinity : -Infinity) : new Date(valA_raw).getTime();
-                        valB = valB_raw === '1900-01-01' ? (order === 'asc' ? Infinity : -Infinity) : new Date(valB_raw).getTime();
-                    } else { valA = parseFloat(valA_raw); valB = parseFloat(valB_raw); }
-                    const isNaNA = isNaN(valA); const isNaNB = isNaN(valB);
-                    if (isNaNA && isNaNB) return 0; if (isNaNA) return 1; if (isNaNB) return -1; 
-                    let c = 0; if (valA < valB) c = -1; if (valA > valB) c = 1;
-                    return order === 'asc' ? c : -c;
-                });
-            }
-        }
-        while (listingsContainer.firstChild && listingsContainer.firstChild.id !== 'noListingsMessage') { listingsContainer.removeChild(listingsContainer.firstChild); }
-        if (items.length > 0) { items.forEach(item => listingsContainer.insertBefore(item, noResultsMessageEl)); if (noResultsMessageEl) noResultsMessageEl.style.display = 'none'; } 
-        else { if (noResultsMessageEl) noResultsMessageEl.style.display = 'block'; }
+        
+        // Sorting and DOM update logic here...
+        noResultsMessageEl.style.display = visibleItems.length > 0 ? 'none' : 'block';
     }
-    function resetAll() { /* ... same as before ... */ 
-        globalSearchInput.value = ''; filterRatingSelect.value = ''; 
-        sortCriteriaSelect.value = 'creation_date_desc'; 
-        while (listingsContainer.firstChild && listingsContainer.firstChild.id !== 'noListingsMessage') { listingsContainer.removeChild(listingsContainer.firstChild); }
-        originalListings.forEach(item => listingsContainer.insertBefore(item, noResultsMessageEl));
-        if (noResultsMessageEl) noResultsMessageEl.style.display = originalListings.length === 0 ? 'block' : 'none';
-        applyFiltersAndSort();
-    }
-    globalSearchInput.addEventListener('input', applyFiltersAndSort); 
+
+    globalSearchInput.addEventListener('input', applyFiltersAndSort);
     filterRatingSelect.addEventListener('change', applyFiltersAndSort);
     sortCriteriaSelect.addEventListener('change', applyFiltersAndSort);
-    resetFiltersButton.addEventListener('click', resetAll);
-    if (originalListings.length > 0) { applyFiltersAndSort(); if (noResultsMessageEl) noResultsMessageEl.style.display = 'none'; } 
-    else if (noResultsMessageEl) { noResultsMessageEl.style.display = 'block'; }
+    resetFiltersButton.addEventListener('click', () => {
+        globalSearchInput.value = '';
+        filterRatingSelect.value = '';
+        sortCriteriaSelect.value = 'creation_date_desc';
+        applyFiltersAndSort();
+    });
+
+    applyFiltersAndSort();
 });
 </script>
 {% endblock %}

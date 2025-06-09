@@ -6,6 +6,8 @@
 
 {% block head_extra %}
     <style>
+        /* All necessary styles for this page */
+        .listing-card-item { } /* Keep empty for JS selector */
         .rating-badge { @apply badge badge-lg font-semibold text-base-content border-opacity-50; }
         .rating-A { @apply badge-success bg-green-100 border-green-400 text-green-700; }
         .rating-B { @apply badge-info bg-blue-100 border-blue-400 text-blue-700; }
@@ -13,11 +15,16 @@
         .rating-D { @apply bg-orange-100 border-orange-500 text-orange-700; }
         .rating-E { @apply bg-red-100 border-red-500 text-red-700; }
         .rating-default { @apply badge-ghost bg-gray-200 border-gray-400 text-gray-600; }
-        .listing-card-item { @apply animate-fadeIn; }
-        .criteria-form-section { @apply mb-6; }
-        .criteria-form-title { @apply text-lg font-semibold text-primary mb-3 pb-2 border-b border-base-300; }
-        .checkbox-grid { @apply grid grid-cols-2 gap-x-4 gap-y-2; }
-        .sticky-form { position: sticky; top: 5rem; max-height: calc(100vh - 6rem); overflow-y: auto; }
+        .verification-dot { @apply h-3 w-3 rounded-full inline-block mx-0.5; }
+        .info-icon { @apply inline-block ml-1 text-xs text-gray-400 cursor-help; }
+        .custom-collapse-title-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: center; width: 100%; }
+        .custom-collapse-title-grid > div:last-child { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+        @media (min-width: 1024px) { .custom-collapse-title-grid > div:last-child { grid-template-columns: minmax(0,0.8fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr); } }
+        @media (min-width: 768px) and (max-width: 1023px) { .custom-collapse-title-grid > div:last-child { grid-template-columns: minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr); } }
+        .criteria-form-card { @apply bg-base-200/60 rounded-lg p-4 mb-4; }
+        .criteria-form-title { @apply text-md font-semibold text-primary mb-3 flex justify-between items-center; }
+        .checkbox-grid { @apply grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2; }
+        .sticky-form-container { position: sticky; top: 5rem; max-height: calc(100vh - 6rem); overflow-y: auto; padding-right: 1rem; }
     </style>
 {% endblock %}
 
@@ -28,162 +35,49 @@
         <p class="text-base-content/70">Adjust criteria on the left to see a live preview of matching loans on the right, then save your strategy.</p>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category if category != 'message' else 'info' }} shadow-lg mb-4">
-                <div> <span>{{ message }}</span> </div>
-            </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     <div class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 lg:gap-8">
         <aside class="lg:col-span-1 xl:col-span-1 mb-8 lg:mb-0">
-            <div class="sticky-form bg-base-100 p-4 rounded-xl shadow-xl">
-                <form id="liveCriteriaForm" method="POST">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="card-title">Strategy Settings</h2>
-                        <button type="reset" id="resetLiveFilters" class="btn btn-ghost btn-sm">Reset</button>
-                    </div>
-                    <div class="criteria-form-section">
-                        <div class="form-control w-full mb-2">
-                            <label class="label"><span class="label-text">Strategy Name</span></label>
-                            <input type="text" class="input input-bordered w-full" id="name" name="name"
-                                   value="{{ criteria.name if criteria else '' }}" required>
-                        </div>
-                        <div class="form-control w-full">
-                            <label class="label"><span class="label-text">Investment Amount per Note ($)</span></label>
-                            <input type="number" class="input input-bordered w-full" id="investment_amount" name="investment_amount"
-                                   value="{{ criteria.investment_amount if criteria else '25' }}" min="25" step="25" required>
-                        </div>
-                    </div>
-                    <div class="criteria-form-section">
-                        <h3 class="criteria-form-title">Prosper Rating</h3>
-                        <div class="checkbox-grid">
-                            {% set ratings = ['AA', 'A', 'B', 'C', 'D', 'E', 'HR'] %}
-                            {% for rating in ratings %}
-                            <div class="form-control">
-                                <label class="label cursor-pointer justify-start gap-3 p-1">
-                                    <input type="checkbox" class="checkbox checkbox-primary checkbox-sm" name="prosper_rating" value="{{ rating }}"
-                                           {% if criteria and rating in criteria_dict.get('prosper_rating', []) %}checked{% endif %}>
-                                    <span class="label-text">{{ rating }}</span>
-                                </label>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="criteria-form-section">
-                        <h3 class="criteria-form-title">Credit Profile</h3>
-                        <div class="space-y-2">
-                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text">FICO Score Range</span></label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" name="min_fico" placeholder="Min" class="input input-bordered input-sm w-full"
-                                           value="{{ criteria_dict.get('fico_score', {}).get('min', '') if criteria else '' }}">
-                                    <span>-</span>
-                                    <input type="number" name="max_fico" placeholder="Max" class="input input-bordered input-sm w-full"
-                                           value="{{ criteria_dict.get('fico_score', {}).get('max', '') if criteria else '' }}">
-                                </div>
-                            </div>
-                            <div class="form-control">
-                                <label class="label py-1"><span class="label-text">Inquiries (Last 6 mo)</span></label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" name="min_inquiries_6mo" placeholder="Min" class="input input-bordered input-sm w-full">
-                                    <span>-</span>
-                                    <input type="number" name="max_inquiries_6mo" placeholder="Max" class="input input-bordered input-sm w-full">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                     <div class="criteria-form-section">
-                        <h3 class="criteria-form-title">Employment</h3>
-                        <div class="form-control mb-4">
-                            <label class="label py-1"><span class="label-text">Months Employed</span></label>
-                            <div class="flex items-center gap-2">
-                                <input type="number" name="min_months_employed" placeholder="Min" class="input input-bordered input-sm w-full">
-                                <span>-</span>
-                                <input type="number" name="max_months_employed" placeholder="Max" class="input input-bordered input-sm w-full">
-                            </div>
-                        </div>
-                        <h4 class="text-sm font-medium mb-2">Employment Status</h4>
-                        <div class="checkbox-grid">
-                            {% set employment_statuses = ['Employed', 'Full-time', 'Self-employed', 'Retired', 'Other'] %}
-                            {% for status in employment_statuses %}
-                            <div class="form-control">
-                                <label class="label cursor-pointer justify-start gap-3 p-1">
-                                    <input type="checkbox" class="checkbox checkbox-primary checkbox-sm" name="employment_status" value="{{ status }}">
-                                    <span class="label-text">{{ status }}</span> 
-                                </label>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="mt-8 pt-6 border-t border-base-300 space-y-4">
-                        <div class="form-control w-fit">
-                            <label class="label cursor-pointer gap-4">
-                                <span class="label-text font-semibold">Activate this Strategy</span> 
-                                <input type="checkbox" class="toggle toggle-success" id="active" name="active"
-                                       {% if criteria and criteria.active %}checked{% endif %}>
-                            </label>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">
-                            {% if criteria %}Update & Save Strategy{% else %}Save New Strategy{% endif %}
-                        </button>
-                    </div>
+            <div class="sticky-form-container">
+                <form id="liveCriteriaForm" method="POST" class="bg-base-100 p-4 rounded-xl shadow-xl">
+                    <div class="flex justify-between items-center mb-4"><h2 class="card-title">Strategy Settings</h2><button type="reset" id="resetLiveFilters" class="btn btn-ghost btn-sm">Reset</button></div>
+                    <div class="criteria-form-card"><div class="form-control w-full mb-2"><label class="label"><span class="label-text font-medium">Strategy Name</span></label><input type="text" name="name" class="input input-bordered w-full" value="{{ criteria.name if criteria else '' }}" required></div><div class="form-control w-full"><label class="label"><span class="label-text font-medium">Investment Amount per Note ($)</span></label><input type="number" name="investment_amount" class="input input-bordered w-full" value="{{ criteria.investment_amount if criteria else '25' }}" min="25" step="25" required></div></div>
+                    {% set ratings = ['AA', 'A', 'B', 'C', 'D', 'E', 'HR'] %}{% set employment_statuses = ['Employed', 'Full-time', 'Self-employed', 'Retired', 'Other', 'Not available'] %}{% set categories = [{'id': 1, 'name': 'Debt Consolidation'}, {'id': 2, 'name': 'Home Improvement'}, {'id': 3, 'name': 'Business'}, {'id': 6, 'name': 'Auto'}, {'id': 7, 'name': 'Other'}, {'id': 15, 'name': 'Medical/Dental'}, {'id': 19, 'name': 'Vacation'}] %}{% set states = ['AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY'] %}{% set occupations = ['Accountant/CPA', 'Analyst', 'Attorney', 'Computer Programmer', 'Doctor', 'Engineer', 'Executive', 'Manager', 'Nurse', 'Other', 'Professional', 'Teacher', 'Skilled Labor'] %}
+                    <div class="criteria-form-card"><h3 class="criteria-form-title">Prosper Rating</h3><div class="checkbox-grid">{% for item in ratings %}<div class="form-control"><label class="label cursor-pointer justify-start gap-3 p-1"><input type="checkbox" name="prosper_rating" value="{{ item }}" class="checkbox checkbox-primary checkbox-sm" {% if criteria and item in criteria_dict.get('prosper_rating', []) %}checked{% endif %}><span class="label-text">{{ item }}</span></label></div>{% endfor %}</div></div>
+                    <div class="criteria-form-card"><h3 class="criteria-form-title">Employment Status</h3><div class="checkbox-grid">{% for item in employment_statuses %}<div class="form-control"><label class="label cursor-pointer justify-start gap-3 p-1"><input type="checkbox" name="employment_status" value="{{ item }}" class="checkbox checkbox-primary checkbox-sm" {% if criteria and item in criteria_dict.get('employment_status_description', []) %}checked{% endif %}><span class="label-text">{{ item }}</span></label></div>{% endfor %}</div></div>
+                    <div class="criteria-form-card"><h3 class="criteria-form-title">Listing Category</h3><div class="checkbox-grid">{% for item in categories %}<div class="form-control"><label class="label cursor-pointer justify-start gap-3 p-1"><input type="checkbox" name="listing_category" value="{{ item.id }}" class="checkbox checkbox-primary checkbox-sm" {% if criteria and item.id in criteria_dict.get('listing_category_id', []) %}checked{% endif %}><span class="label-text">{{ item.name }}</span></label></div>{% endfor %}</div></div>
+                    <div class="criteria-form-card"><h3 class="criteria-form-title">Borrower State</h3><div class="checkbox-grid" style="grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));">{% for item in states %}<div class="form-control"><label class="label cursor-pointer justify-start gap-3 p-1"><input type="checkbox" name="borrower_state" value="{{ item }}" class="checkbox checkbox-primary checkbox-sm" {% if criteria and item in criteria_dict.get('borrower_state', []) %}checked{% endif %}><span class="label-text">{{ item }}</span></label></div>{% endfor %}</div></div>
+                    <div class="criteria-form-card"><h3 class="criteria-form-title">Occupation</h3><div class="checkbox-grid">{% for item in occupations %}<div class="form-control"><label class="label cursor-pointer justify-start gap-3 p-1"><input type="checkbox" name="occupation" value="{{ item }}" class="checkbox checkbox-primary checkbox-sm" {% if criteria and item in criteria_dict.get('occupation', []) %}checked{% endif %}><span class="label-text">{{ item }}</span></label></div>{% endfor %}</div></div>
+                    <div class="criteria-form-card"><h3 class="criteria-form-title">Ranges</h3><div class="space-y-4"><div class="form-control"><label class="label py-1"><span class="label-text">Months Employed</span></label><div class="flex items-center gap-2"><input type="number" name="min_months_employed" placeholder="Min" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('months_employed', {}).get('min') or '' }}"><input type="number" name="max_months_employed" placeholder="Max" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('months_employed', {}).get('max') or '' }}"></div></div><div class="form-control"><label class="label py-1"><span class="label-text">TransUnion FICO Score</span></label><div class="flex items-center gap-2"><input type="number" name="min_fico" placeholder="Min" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('fico_score', {}).get('min') or '' }}"><input type="number" name="max_fico" placeholder="Max" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('fico_score', {}).get('max') or '' }}"></div></div><div class="form-control"><label class="label py-1"><span class="label-text">Listing Request Amount ($)</span></label><div class="flex items-center gap-2"><input type="number" name="min_loan_amount" placeholder="Min" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('amount_requested', {}).get('min') or '' }}"><input type="number" name="max_loan_amount" placeholder="Max" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('amount_requested', {}).get('max') or '' }}"></div></div><div class="form-control"><label class="label py-1"><span class="label-text">Borrower Rate (%)</span></label><div class="flex items-center gap-2"><input type="number" step="0.01" name="min_borrower_rate" placeholder="Min" class="input input-bordered input-sm w-full" value="{{ (criteria_dict.get('borrower_rate', {}).get('min', 0) * 100)|round(2) if criteria and criteria_dict.get('borrower_rate', {}).get('min') is not none else '' }}"><input type="number" step="0.01" name="max_borrower_rate" placeholder="Max" class="input input-bordered input-sm w-full" value="{{ (criteria_dict.get('borrower_rate', {}).get('max', 0) * 100)|round(2) if criteria and criteria_dict.get('borrower_rate', {}).get('max') is not none else '' }}"></div></div><div class="form-control"><label class="label py-1"><span class="label-text">Trades Opened (24 mo) [AT09S]</span></label><div class="flex items-center gap-2"><input type="number" name="min_at09s" placeholder="Min" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('at09s', {}).get('min') or '' }}"><input type="number" name="max_at09s" placeholder="Max" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('at09s', {}).get('max') or '' }}"></div></div><div class="form-control"><label class="label py-1"><span class="label-text">Inquiries (6 mo) [G237S]</span></label><div class="flex items-center gap-2"><input type="number" name="min_g237s" placeholder="Min" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('g237s', {}).get('min') or '' }}"><input type="number" name="max_g237s" placeholder="Max" class="input input-bordered input-sm w-full" value="{{ criteria_dict.get('g237s', {}).get('max') or '' }}"></div></div></div></div>
+                    <div class="mt-8 pt-6 border-t border-base-300 space-y-4"><div class="form-control w-fit"><label class="label cursor-pointer gap-4"><span class="label-text font-semibold">Activate this Strategy</span><input type="checkbox" class="toggle toggle-success" name="active" {% if criteria and criteria.active %}checked{% endif %}></label></div><button type="submit" class="btn btn-primary btn-block">{% if criteria %}Update & Save Strategy{% else %}Save New Strategy{% endif %}</button></div>
                 </form>
             </div>
         </aside>
 
         <section class="lg:col-span-2 xl:col-span-3">
-            <div class="flex justify-between items-center mb-4">
-                <p>Showing <strong id="resultsCount">0</strong> matching loans.</p>
-                <div>
-                    <label for="sortListings" class="label-text mr-2">Sort By:</label>
-                    <select id="sortListings" class="select select-bordered select-sm">
-                        <option value="creation_date_desc" selected>Date Listed (Newest)</option>
-                        <option value="yield_desc">Yield (High to Low)</option>
-                        </select>
-                </div>
-            </div>
+            <div id="resultsHeader" class="flex flex-wrap gap-4 justify-between items-center mb-4"><p>Showing <strong id="resultsCount">0</strong> matching loans.</p><div class="flex items-center gap-2"><label for="sortListings" class="label-text">Sort By:</label><select id="sortListings" class="select select-bordered select-sm"><option value="creation_date_desc" selected>Date Listed (Newest)</option><option value="yield_desc">Yield (High to Low)</option><option value="amount_desc">Amount (High to Low)</option><option value="default">Original Order</option></select></div></div>
             <div id="listingsContainer" class="space-y-4">
                 {% if listings_data and listings_data.result %}
                     {% for listing in listings_data.result %}
-                    <div class="listing-card-item bg-base-100 shadow-lg rounded-xl border-l-4 border-primary" 
+                    <div class="listing-card-item"
                          data-rating="{{ listing.prosper_rating|upper if listing.prosper_rating else '' }}"
                          data-fico="{{ listing.credit_bureau_values_transunion_indexed.fico_score.split('-')[0]|trim if listing.credit_bureau_values_transunion_indexed and listing.credit_bureau_values_transunion_indexed.fico_score else 0 }}"
-                         data-inquiries6mo="{{ listing.credit_bureau_values_transunion_indexed.g980s_inquiries_in_the_last_6_months if listing.credit_bureau_values_transunion_indexed else 0 }}"
-                         data-monthsemployed="{{ listing.months_employed if listing.months_employed is number else -1 }}"
-                         data-employmentstatus="{{ listing.employment_status_description|e }}"
-                         data-yield="{{ listing.lender_yield }}"
-                         data-creationdate="{{ listing.listing_creation_date|e if listing.listing_creation_date else '1900-01-01' }}">
-                        {# Card content - same as before #}
-                         <div class="flex items-start space-x-3 md:space-x-4 p-3 md:p-4">
-                            <input type="radio" name="selected_listing_main_group" value="{{ listing.listing_number }}" class="radio radio-primary radio-sm sm:radio-md mt-3 md:mt-4 shrink-0">
-                            <div class="flex-grow collapse collapse-arrow min-w-0">
-                                <input type="checkbox" /> 
-                                <div class="collapse-title !p-0 !pr-8 md:!pr-10">
-                                    <div class="custom-collapse-title-grid py-1">
-                                        <div class="rating-badge rating-{{ listing.prosper_rating|upper if listing.prosper_rating else 'default' }}"> {{ listing.prosper_rating|upper if listing.prosper_rating else 'N/A' }} </div>
-                                        <div class="min-w-0">
-                                            <div class="flex flex-col text-sm"> <span class="font-semibold text-neutral-focus">Listed: {{ listing.listing_creation_date.split(' ')[0] if listing.listing_creation_date else 'N/A' }}</span> </div>
-                                            <div class="flex flex-col min-w-0"> <span class="font-semibold text-base md:text-lg text-neutral-focus truncate">${{ "%.2f"|format(listing.listing_amount) }}</span> <span class="text-xs text-gray-600 truncate">{{ listing.listing_title }}</span> {% if listing.invested %}<span class="text-xs text-primary-focus font-semibold">You've already invested</span>{% endif %} </div>
-                                            <div class="term-yield-md-stack flex flex-col lg:flex-row lg:items-center lg:space-x-4"> <div class="text-sm text-neutral-focus">{{ (listing.listing_term / 12)|int }} Years</div> <div class="text-sm font-semibold text-neutral-focus">{{ "%.2f%%"|format(listing.lender_yield * 100) }} Yield</div> </div>
-                                            <div class="w-full min-w-0"> <progress class="progress progress-accent w-full mb-1" value="{{ (listing.percent_funded * 100)|int }}" max="100"></progress> <div class="text-xs text-gray-600 flex justify-between flex-wrap"><span class="whitespace-nowrap">${{ "%.0f"|format(listing.amount_remaining) }} left</span></div> </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="collapse-content bg-base-200/60 p-3 md:p-4 !pb-2 rounded-b-lg -mt-1">
-                                    <div class="mt-4 flex justify-between items-center"> <span class="text-xs text-gray-400">Listing ID: {{ listing.listing_number }}</span> <button class="btn btn-link btn-primary btn-xs sm:btn-sm p-0">View Full Details</button> </div>
-                                </div>
-                            </div>
-                        </div>
+                         data-borrower-rate="{{ listing.borrower_rate if listing.borrower_rate is number else -1 }}"
+                         data-amount="{{ listing.listing_amount }}"
+                         data-listing-category-id="{{ listing.listing_category_id }}"
+                         data-borrower-state="{{ listing.borrower_state|e }}"
+                         data-occupation="{{ listing.occupation|e }}"
+                         data-months-employed="{{ listing.months_employed if listing.months_employed is number else -1 }}"
+                         data-employment-status="{{ listing.employment_status_description|e }}"
+                         data-at09s="{{ listing.credit_bureau_values_transunion_indexed.at09s if listing.credit_bureau_values_transunion_indexed and listing.credit_bureau_values_transunion_indexed.at09s is defined else -1 }}"
+                         data-g237s="{{ listing.credit_bureau_values_transunion_indexed.g980s_inquiries_in_the_last_6_months if listing.credit_bureau_values_transunion_indexed and listing.credit_bureau_values_transunion_indexed.g980s_inquiries_in_the_last_6_months is defined else -1 }}"
+                         data-creation-date="{{ listing.listing_creation_date|e if listing.listing_creation_date else '1900-01-01' }}">
+                        {% with item=listing, card_type='listing' %}
+                            {% include '_card.html' %}
+                        {% endwith %}
                     </div>
                     {% endfor %}
                 {% endif %}
-                <div id="noListingsMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;">
-                    <p class="text-xl text-gray-500">No listings match your criteria.</p>
-                </div>
+                <div id="noListingsMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;"><p class="text-xl text-gray-500">No listings match your criteria.</p></div>
             </div>
         </section>
     </div>
@@ -200,89 +94,143 @@ document.addEventListener('DOMContentLoaded', function () {
     const resultsCountEl = document.getElementById('resultsCount');
     const resetFiltersButton = document.getElementById('resetLiveFilters');
 
+    if (!form) return; // Stop if form doesn't exist on the page
+
     const originalListings = Array.from(listingsContainer.querySelectorAll('.listing-card-item'));
 
     function applyFiltersAndSort() {
-        const formData = new FormData(form);
         const criteria = {
-            prosper_rating: formData.getAll('prosper_rating'),
-            employment_status: formData.getAll('employment_status'),
-            min_fico: parseFloat(formData.get('min_fico')) || null,
-            max_fico: parseFloat(formData.get('max_fico')) || null,
-            min_inquiries_6mo: parseFloat(formData.get('min_inquiries_6mo')) || null,
-            max_inquiries_6mo: parseFloat(formData.get('max_inquiries_6mo')) || null,
-            min_months_employed: parseFloat(formData.get('min_months_employed')) || null,
-            max_months_employed: parseFloat(formData.get('max_months_employed')) || null,
+            prosper_rating: Array.from(form.querySelectorAll('input[name="prosper_rating"]:checked')).map(cb => cb.value),
+            employment_status: Array.from(form.querySelectorAll('input[name="employment_status"]:checked')).map(cb => cb.value),
+            listing_category: Array.from(form.querySelectorAll('input[name="listing_category"]:checked')).map(cb => parseInt(cb.value)),
+            borrower_state: Array.from(form.querySelectorAll('input[name="borrower_state"]:checked')).map(cb => cb.value),
+            occupation: Array.from(form.querySelectorAll('input[name="occupation"]:checked')).map(cb => cb.value),
+            min_fico: parseFloat(form.querySelector('input[name="min_fico"]').value) || null,
+            max_fico: parseFloat(form.querySelector('input[name="max_fico"]').value) || null,
+            min_at09s: parseFloat(form.querySelector('input[name="min_at09s"]').value) || null,
+            max_at09s: parseFloat(form.querySelector('input[name="max_at09s"]').value) || null,
+            min_g237s: parseFloat(form.querySelector('input[name="min_g237s"]').value) || null,
+            max_g237s: parseFloat(form.querySelector('input[name="max_g237s"]').value) || null,
+            min_borrower_rate: (parseFloat(form.querySelector('input[name="min_borrower_rate"]').value) / 100.0) || null,
+            max_borrower_rate: (parseFloat(form.querySelector('input[name="max_borrower_rate"]').value) / 100.0) || null,
+            min_loan_amount: parseFloat(form.querySelector('input[name="min_loan_amount"]').value) || null,
+            max_loan_amount: parseFloat(form.querySelector('input[name="max_loan_amount"]').value) || null,
+            min_months_employed: parseFloat(form.querySelector('input[name="min_months_employed"]').value) || null,
+            max_months_employed: parseFloat(form.querySelector('input[name="max_months_employed"]').value) || null,
         };
 
-        const sortValue = sortSelect.value;
-        let items = Array.from(originalListings); 
+        let visibleItems = [];
 
-        items = items.filter(item => {
+        originalListings.forEach(item => {
             const data = item.dataset;
-            const ratingMatch = !criteria.prosper_rating.length || criteria.prosper_rating.includes(data.rating);
-            const employmentMatch = !criteria.employment_status.length || criteria.employment_status.includes(data.employmentstatus);
-            const fico = parseFloat(data.fico);
-            const ficoMatch = (!criteria.min_fico || fico >= criteria.min_fico) && (!criteria.max_fico || fico <= criteria.max_fico);
-            const inquiries = parseFloat(data.inquiries6mo);
-            const inquiriesMatch = (!criteria.min_inquiries_6mo || inquiries >= criteria.min_inquiries_6mo) && (!criteria.max_inquiries_6mo || inquiries <= criteria.max_inquiries_6mo);
-            const monthsEmployed = parseFloat(data.monthsemployed);
-            const monthsEmployedMatch = (!criteria.min_months_employed || monthsEmployed >= criteria.min_months_employed) && (!criteria.max_months_employed || monthsEmployed <= criteria.max_months_employed);
+            let isMatch = true;
+
+            // This direct show/hide approach is simpler to debug.
+            // We assume it's a match and then try to prove it false with "guard clauses".
+            if (!itemPassesFilters(data, criteria)) {
+                isMatch = false;
+            }
             
-            return ratingMatch && employmentMatch && ficoMatch && inquiriesMatch && monthsEmployedMatch;
+            item.style.display = isMatch ? '' : 'none';
+            if (isMatch) {
+                visibleItems.push(item);
+            }
         });
 
-        // Sorting logic remains the same proven logic
+        resultsCountEl.textContent = visibleItems.length;
+        noResultsMessageEl.style.display = visibleItems.length > 0 ? 'none' : 'block';
+
+        // Sort the visible items and re-append them to the container to apply the order
+        const sortValue = sortSelect.value;
         if (sortValue !== 'default') {
-             const parts = sortValue.split('_'); const order = parts.pop(); const keyString = parts.join('_');
+            const parts = sortValue.split('_'); 
+            const order = parts.pop(); 
+            const keyString = parts.join('_');
             let datasetAttr;
-            switch (keyString) {
-                case 'creation_date': datasetAttr = 'creationdate'; break;
-                case 'yield': datasetAttr = 'yield'; break;
-                // Add other cases as needed
-                default: datasetAttr = null; 
-            }
-            if(datasetAttr) {
-                items.sort((a, b) => {
+            switch (keyString) { case 'creation_date': datasetAttr = 'creationDate'; break; case 'yield': datasetAttr = 'yield'; break; case 'amount': datasetAttr = 'amount'; break; default: datasetAttr = null; }
+            
+            if(datasetAttr){ 
+                visibleItems.sort((a, b) => {
                     let valA_raw = a.dataset[datasetAttr]; let valB_raw = b.dataset[datasetAttr];
                     let valA, valB;
-                    if (datasetAttr === 'creationdate') {
-                        valA = new Date(valA_raw).getTime();
-                        valB = new Date(valB_raw).getTime();
-                    } else { valA = parseFloat(valA_raw); valB = parseFloat(valB_raw); }
+                    if (datasetAttr === 'creationDate') {
+                        valA = new Date(valA_raw).getTime(); valB = new Date(valB_raw).getTime();
+                    } else { 
+                        valA = parseFloat(valA_raw); valB = parseFloat(valB_raw); 
+                    }
                     const isNaNA = isNaN(valA); const isNaNB = isNaN(valB);
                     if (isNaNA && isNaNB) return 0; if (isNaNA) return 1; if (isNaNB) return -1; 
                     let c = 0; if (valA < valB) c = -1; if (valA > valB) c = 1;
                     return order === 'asc' ? c : -c;
                 });
+
+                // Re-append to apply sort order
+                visibleItems.forEach(sortedItem => listingsContainer.appendChild(sortedItem));
+            }
+        }
+    }
+
+    function itemPassesFilters(data, criteria) {
+        // Parse data from the card's dataset
+        const itemFico = parseFloat(data.fico);
+        const itemAmount = parseFloat(data.amount);
+        const itemRate = parseFloat(data.borrowerRate);
+        const itemMonthsEmployed = parseFloat(data.monthsEmployed);
+        const itemAt09s = parseFloat(data.at09s);
+        const itemG237s = parseFloat(data.g237s);
+        const itemCategoryId = parseInt(data.listingCategoryId);
+
+        // Checkbox/Multiselect filters
+        if (criteria.prosper_rating.length > 0 && !criteria.prosper_rating.includes(data.rating)) return false;
+        if (criteria.employment_status.length > 0 && !criteria.employment_status.includes(data.employmentStatus)) return false;
+        if (criteria.listing_category.length > 0 && !criteria.listing_category.includes(itemCategoryId)) return false;
+        if (criteria.borrower_state.length > 0 && !criteria.borrower_state.includes(data.borrowerState)) return false;
+        if (criteria.occupation.length > 0 && !criteria.occupation.includes(data.occupation)) return false;
+
+        // Min/Max Range Filters
+        if (criteria.min_fico && itemFico < criteria.min_fico) return false;
+        if (criteria.max_fico && itemFico > criteria.max_fico) return false;
+
+        if (criteria.min_loan_amount && itemAmount < criteria.min_loan_amount) return false;
+        if (criteria.max_loan_amount && itemAmount > criteria.max_loan_amount) return false;
+
+        // For ranges with potential missing data (-1), fail if a filter is set AND data is missing or out of bounds.
+        if (criteria.min_borrower_rate || criteria.max_borrower_rate) {
+            if (itemRate < 0 || (criteria.min_borrower_rate && itemRate < criteria.min_borrower_rate) || (criteria.max_borrower_rate && itemRate > criteria.max_borrower_rate)) {
+                return false;
+            }
+        }
+        if (criteria.min_months_employed || criteria.max_months_employed) {
+            if (itemMonthsEmployed < 0 || (criteria.min_months_employed && itemMonthsEmployed < criteria.min_months_employed) || (criteria.max_months_employed && itemMonthsEmployed > criteria.max_months_employed)) {
+                return false;
+            }
+        }
+        if (criteria.min_at09s || criteria.max_at09s) {
+            if (itemAt09s < 0 || (criteria.min_at09s && itemAt09s < criteria.min_at09s) || (criteria.max_at09s && itemAt09s > criteria.max_at09s)) {
+                return false;
+            }
+        }
+        if (criteria.min_g237s || criteria.max_g237s) {
+            if (itemG237s < 0 || (criteria.min_g237s && itemG237s < criteria.min_g237s) || (criteria.max_g237s && itemG237s > criteria.max_g237s)) {
+                return false;
             }
         }
         
-        // --- CORRECTED DOM Update ---
-        // 1. Clear only the listing items, leaving the message element.
-        listingsContainer.querySelectorAll('.listing-card-item').forEach(node => node.remove());
-
-        // 2. Append the filtered and sorted items.
-        if (items.length > 0) {
-            items.forEach(itemToShow => listingsContainer.appendChild(itemToShow));
-            if (noResultsMessageEl) noResultsMessageEl.style.display = 'none';
-        } else {
-            if (noResultsMessageEl) noResultsMessageEl.style.display = 'block';
-        }
-
-        // 3. Update the count.
-        resultsCountEl.textContent = items.length;
+        // If we made it through all the checks, it's a match!
+        return true;
     }
 
+    // Attach event listeners
     form.addEventListener('input', applyFiltersAndSort);
     form.addEventListener('change', applyFiltersAndSort);
     sortSelect.addEventListener('change', applyFiltersAndSort);
-    resetFiltersButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        form.reset();
-        applyFiltersAndSort();
+    resetFiltersButton.addEventListener('click', (e) => { 
+        e.preventDefault(); 
+        form.reset(); 
+        applyFiltersAndSort(); 
     });
 
+    // Initial run on page load
     applyFiltersAndSort();
 });
 </script>

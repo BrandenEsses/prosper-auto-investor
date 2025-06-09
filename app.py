@@ -195,47 +195,82 @@ with app.app_context():
         all_strategies = InvestmentCriteria.query.order_by(InvestmentCriteria.name).all()
         return render_template('strategy_list.html', strategies=all_strategies, active_page='strategies')
 
-    @app.route('/strategy', defaults={'strategy_id': None}, methods=['GET', 'POST'])
-    @app.route('/strategy/<int:strategy_id>', methods=['GET', 'POST'])
-    def strategy_manager(strategy_id):
-        criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id) if strategy_id else None
-        if request.method == 'POST':
-            is_new = criteria_obj is None
-            object_to_update = InvestmentCriteria() if is_new else criteria_obj
-            if is_new: db.session.add(object_to_update)
-            flash_message_verb = 'created' if is_new else 'updated'
-            
-            object_to_update.name = request.form.get('name')
-            object_to_update.investment_amount = int(request.form.get('investment_amount', 25))
-            object_to_update.active = 'active' in request.form
-            object_to_update.filters = {
-                'prosper_rating': request.form.getlist('prosper_rating'),
-                'months_employed': {'min': to_nullable_int(request.form.get('min_months_employed')),'max': to_nullable_int(request.form.get('max_months_employed'))},
-                'at09s': {'min': to_nullable_int(request.form.get('min_at09s')),'max': to_nullable_int(request.form.get('max_at09s'))},
-                'g237s': {'min': to_nullable_int(request.form.get('min_g237s')),'max': to_nullable_int(request.form.get('max_g237s'))},
-                'employment_status_description': request.form.getlist('employment_status'),
-                'listing_category_id': [int(val) for val in request.form.getlist('listing_category')],
-                'borrower_state': request.form.getlist('borrower_state'),
-                'amount_requested': {'min': to_nullable_int(request.form.get('min_loan_amount')),'max': to_nullable_int(request.form.get('max_loan_amount'))},
-                'fico_score': {'min': to_nullable_int(request.form.get('min_fico')),'max': to_nullable_int(request.form.get('max_fico'))},
-                'borrower_rate': {'min': to_nullable_float(request.form.get('min_rate')) / 100.0 if request.form.get('min_rate') else None,'max': to_nullable_float(request.form.get('max_rate')) / 100.0 if request.form.get('max_rate') else None},
-                'occupation': request.form.getlist('occupation')
+@app.route('/strategy', defaults={'strategy_id': None}, methods=['GET', 'POST'])
+@app.route('/strategy/<int:strategy_id>', methods=['GET', 'POST'])
+def strategy_manager(strategy_id):
+    """
+    Manages creating and editing an investment strategy, with a live preview.
+    """
+    criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id) if strategy_id else None
+
+    if request.method == 'POST':
+        is_new = criteria_obj is None
+        object_to_update = InvestmentCriteria() if is_new else criteria_obj
+        if is_new:
+            db.session.add(object_to_update)
+        flash_message_verb = 'created' if is_new else 'updated'
+        
+        # --- Populate top-level fields ---
+        object_to_update.name = request.form.get('name')
+        object_to_update.investment_amount = int(request.form.get('investment_amount', 25))
+        object_to_update.active = 'active' in request.form
+        
+        # --- Build the complete JSON object for the 'filters' column ---
+        object_to_update.filters = {
+            'prosper_rating': request.form.getlist('prosper_rating'),
+            'at09s': { # Trades opened in past 24 months
+                'min': to_nullable_int(request.form.get('min_at09s')),
+                'max': to_nullable_int(request.form.get('max_at09s'))
+            },
+            'employment_status_description': request.form.getlist('employment_status'),
+            'borrower_state': request.form.getlist('borrower_state'),
+            'fico_score': { # TransUnion FICO Score
+                'min': to_nullable_int(request.form.get('min_fico')),
+                'max': to_nullable_int(request.form.get('max_fico'))
+            },
+            'occupation': request.form.getlist('occupation'),
+            'months_employed': {
+                'min': to_nullable_int(request.form.get('min_months_employed')),
+                'max': to_nullable_int(request.form.get('max_months_employed'))
+            },
+            'g237s': { # Credit inquiries in past 6 months
+                'min': to_nullable_int(request.form.get('min_g237s')),
+                'max': to_nullable_int(request.form.get('max_g237s'))
+            },
+            'listing_category_id': [int(val) for val in request.form.getlist('listing_category')],
+            'amount_requested': {
+                'min': to_nullable_int(request.form.get('min_loan_amount')),
+                'max': to_nullable_int(request.form.get('max_loan_amount'))
+            },
+            'borrower_rate': {
+                'min': to_nullable_float(request.form.get('min_borrower_rate')) / 100.0 if request.form.get('min_borrower_rate') else None,
+                'max': to_nullable_float(request.form.get('max_borrower_rate')) / 100.0 if request.form.get('max_borrower_rate') else None
             }
-            db.session.commit()
-            flash(f"Strategy '{object_to_update.name}' {flash_message_verb} successfully!", 'success')
-            return redirect(url_for('list_strategies'))
-
-        listings_from_db = AvailableListing.query.all()
-        listings_data_for_template = {"result": [listing.listing_data for listing in listings_from_db]}
-        return render_template('strategy.html', listings_data=listings_data_for_template, criteria=criteria_obj, criteria_dict=criteria_obj.filters if criteria_obj else {}, active_page='strategies')
-
-    @app.route('/strategy/<int:strategy_id>/delete', methods=['POST'])
-    def delete_strategy(strategy_id):
-        criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id)
-        db.session.delete(criteria_obj)
+        }
+        
         db.session.commit()
-        flash(f"Strategy '{criteria_obj.name}' has been deleted.", 'info')
+        flash(f"Strategy '{object_to_update.name}' {flash_message_verb} successfully!", 'success')
         return redirect(url_for('list_strategies'))
+
+    # For GET requests, load listings for the live preview from our database cache
+    listings_from_db = AvailableListing.query.all()
+    listings_data_for_template = {"result": [listing.listing_data for listing in listings_from_db]}
+    
+    return render_template(
+        'strategy.html', 
+        listings_data=listings_data_for_template,
+        criteria=criteria_obj,
+        criteria_dict=criteria_obj.filters if criteria_obj else {},
+        active_page='strategies'
+    )
+    
+@app.route('/strategy/<int:strategy_id>/delete', methods=['POST'])
+def delete_strategy(strategy_id):
+    criteria_obj = InvestmentCriteria.query.get_or_404(strategy_id)
+    db.session.delete(criteria_obj)
+    db.session.commit()
+    flash(f"Strategy '{criteria_obj.name}' has been deleted.", 'info')
+    return redirect(url_for('list_strategies'))
 
 
 # Main entry point for running with `python app.py`

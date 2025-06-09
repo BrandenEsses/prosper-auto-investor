@@ -4,25 +4,9 @@
 
 {% block head_extra %}
 <style>
-    /* Styles for the table remain the same */
-    .criteria-table td, .criteria-table th {
-        @apply p-2 border border-base-300 text-sm;
-    }
-    
-    /* NEW: Styles for the flash message fade-out animation */
-    .alert {
-        /* This makes the alert smoothly transition its properties */
-        transition: opacity 0.5s ease-out, transform 0.5s ease-out, margin 0.5s ease-out;
-    }
-    .alert-fade-out {
-        /* This is the state we transition TO when removing the alert */
-        opacity: 0;
-        transform: translateY(-20px);
-        margin-top: -5rem; /* Animate margin to pull up the content below it */
-    }
+    .criteria-table td, .criteria-table th { @apply p-3 border-b border-base-200 text-sm; }
 </style>
 {% endblock %}
-
 
 {% block content %}
 <main class="flex-grow container mx-auto p-2 sm:p-4 lg:p-6">
@@ -37,7 +21,6 @@
             {% for category, message in messages %}
             <div class="alert alert-{{ category if category != 'message' else 'info' }} shadow-lg mb-4">
                 {% if category == 'success' %}<svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>{% endif %}
-                {% if category == 'info' %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>{% endif %}
                 <span>{{ message }}</span>
             </div>
             {% endfor %}
@@ -50,12 +33,7 @@
         <table class="table w-full criteria-table">
             <thead>
                 <tr class="text-center">
-                    <th class="text-left">Strategy Name</th>
-                    <th>Investment Amt.</th>
-                    <th>Status</th>
-                    <th>Ratings Included</th>
-                    <th>Created On</th>
-                    <th>Actions</th>
+                    <th class="text-left">Strategy Name</th><th>Investment Amt.</th><th>Status</th><th>Ratings Included</th><th>Created On</th><th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -63,20 +41,8 @@
                 <tr class="hover">
                     <td class="font-semibold text-left">{{ strategy.name }}</td>
                     <td class="text-center">${{ strategy.investment_amount }}</td>
-                    <td class="text-center">
-                        {% if strategy.active %}
-                            <span class="badge badge-success badge-sm">Active</span>
-                        {% else %}
-                            <span class="badge badge-ghost badge-sm">No</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-center">
-                        {% if strategy.filters.prosper_rating %}
-                            {{ strategy.filters.prosper_rating|join(', ') }}
-                        {% else %}
-                            <span class="italic text-gray-500">Any</span>
-                        {% endif %}
-                    </td>
+                    <td class="text-center">{% if strategy.active %}<span class="badge badge-success badge-sm">Active</span>{% else %}<span class="badge badge-ghost badge-sm">Inactive</span>{% endif %}</td>
+                    <td class="text-center">{% if strategy.filters.prosper_rating %}{{ strategy.filters.prosper_rating|join(', ') }}{% else %}<span class="italic text-gray-500">Any</span>{% endif %}</td>
                     <td class="text-center">{{ strategy.created_at.strftime('%Y-%m-%d') }}</td>
                     <td class="text-center space-x-1">
                         <a href="{{ url_for('strategy_manager', strategy_id=strategy.id) }}" class="btn btn-xs btn-outline btn-info">Edit</a>
@@ -96,29 +62,4 @@
     </div>
     {% endif %}
 </main>
-{% endblock %}
-
-
-{% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Select all flash message alerts within the container
-    const flashMessages = document.querySelectorAll('#flash-message-container .alert');
-
-    flashMessages.forEach(function(message) {
-        // Set a timer to start the fade-out process after 4 seconds
-        setTimeout(() => {
-            // Add the class that triggers the CSS transition
-            message.classList.add('alert-fade-out');
-
-            // The 'transitionend' event fires when the CSS transition is complete.
-            // After it finishes, we remove the element from the page entirely.
-            message.addEventListener('transitionend', () => {
-                message.remove();
-            });
-
-        }, 4000); // 4000 milliseconds = 4 seconds
-    });
-});
-</script>
 {% endblock %}

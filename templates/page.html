@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Prosper Auto Investor{% endblock %}</title>
+    <title>{% block title %}Loan Data Viewer{% endblock %}</title>
     
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -26,22 +26,31 @@
         body { 
             font-family: 'Inter', sans-serif; 
         }
+        /* Style for auto-hiding flash messages */
+        #flash-message-container .alert {
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out, margin 0.5s ease-out;
+        }
+        .alert-fade-out {
+            opacity: 0;
+            transform: translateY(-20px);
+            margin-top: -5rem;
+        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    {% block head_extra %}{# For page-specific CSS links or inline styles #}{% endblock %}
+    {% block head_extra %}{% endblock %}
 </head>
 <body class="bg-base-200 min-h-screen flex flex-col">
 
     <div class="navbar bg-base-100 shadow-md sticky top-0 z-50">
       <div class="navbar-start">
-        <a href="/" class="btn btn-ghost text-xl">Prosper Auto Investor</a>
+        <a href="{{ url_for('index') }}" class="btn btn-ghost text-xl">Loan Data Viewer</a>
       </div>
       <div class="navbar-end">
         <ul class="menu menu-horizontal px-1">
-          <li><a href="{{ url_for('notes') }}" class="btn btn-sm md:btn-md {{ 'btn-primary' if active_page == 'notes' else 'btn-ghost' }}">Current Notes</a></li>
+          <li><a href="{{ url_for('notes') }}" class="btn btn-sm md:btn-md {{ 'btn-primary' if active_page == 'notes' else 'btn-ghost' }}">My Notes</a></li>
           <li><a href="{{ url_for('listings') }}" class="btn btn-sm md:btn-md {{ 'btn-primary' if active_page == 'listings' else 'btn-ghost' }}">Available Listings</a></li>
           <li><a href="{{ url_for('list_strategies') }}" class="btn btn-sm md:btn-md {{ 'btn-primary' if active_page == 'strategies' else 'btn-ghost' }}">My Strategies</a></li>
         </ul>
@@ -52,6 +61,7 @@
 
     <footer class="footer footer-center p-4 bg-base-300 text-base-content mt-auto">
       <div>
+        <p>Copyright © {{ now().year }} - All right reserved</p>
         {% if last_refresh_timestamp %}
         <p class="text-xs text-base-content/70" id="last-refresh-footer" 
            data-timestamp="{{ last_refresh_timestamp }}">
@@ -64,37 +74,29 @@
     {% block scripts_before_main %}{% endblock %}
     {% block scripts %}{% endblock %}
 
-    {# --- NEW: Add this script to format the timestamp --- #}
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Find the footer element that holds our timestamp
+        // Find and format the last-refreshed timestamp
         const refreshElement = document.getElementById('last-refresh-footer');
-
         if (refreshElement) {
-            // Get the UTC timestamp string we passed from the backend via the data-timestamp attribute
             const utcTimestampString = refreshElement.dataset.timestamp;
-            
             if (utcTimestampString) {
-                // Create a JavaScript Date object. It automatically parses the ISO format string as UTC.
                 const dateObj = new Date(utcTimestampString);
-
-                // Use the modern Intl.DateTimeFormat API for nice, locale-aware formatting.
-                // It automatically uses the browser's timezone and language settings.
-                const options = {
-                    year: 'numeric', month: 'short', day: 'numeric',
-                    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-                };
-                
-                // Passing 'undefined' tells it to use the browser's default locale.
+                const options = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
                 const formattedDate = new Intl.DateTimeFormat(undefined, options).format(dateObj);
-
-                // Find the placeholder 'span' and update its text with the formatted date.
                 const textSpan = refreshElement.querySelector('span');
-                if(textSpan) {
-                    textSpan.textContent = formattedDate;
-                }
+                if(textSpan) textSpan.textContent = formattedDate;
             }
         }
+
+        // Find and auto-hide any flash messages that appear on a page
+        const flashMessages = document.querySelectorAll('#flash-message-container .alert');
+        flashMessages.forEach(function(message) {
+            setTimeout(() => {
+                message.classList.add('alert-fade-out');
+                message.addEventListener('transitionend', () => message.remove());
+            }, 5000); // 5 seconds
+        });
     });
     </script>
 </body>
