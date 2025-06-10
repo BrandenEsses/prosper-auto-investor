@@ -4,19 +4,21 @@
 
 {% block head_extra %}
     <style>
-        .note-card-item { } /* JS Selector */
+        .note-card-item { animation: fadeIn 0.3s ease-out; }
+        .pagination .btn.btn-active { font-weight: bold; }
         /* Styles for rating badges */
         .rating-badge { @apply badge badge-lg font-semibold text-base-content border-opacity-50; }
-        .rating-A { @apply badge-success bg-green-100 border-green-400 text-green-700; }
+        .rating-AA, .rating-A { @apply badge-success bg-green-100 border-green-400 text-green-700; }
         .rating-B { @apply badge-info bg-blue-100 border-blue-400 text-blue-700; }
         .rating-C { @apply badge-warning bg-yellow-100 border-yellow-500 text-yellow-800; }
         .rating-D { @apply bg-orange-100 border-orange-500 text-orange-700; }
-        .rating-E { @apply bg-red-100 border-red-500 text-red-700; }
+        .rating-E, .rating-HR { @apply bg-red-100 border-red-500 text-red-700; }
         .rating-default { @apply badge-ghost bg-gray-200 border-gray-400 text-gray-600; }
         /* Styles for note status badges */
         .note-status-badge { @apply badge badge-md font-semibold; }
         .note-status-CURRENT { @apply badge-success text-success-content; }
-        .note-status-LATE { @apply badge-error text-error-content; }
+        .note-status-LATE, .note-status-PAST_DUE_1_15, .note-status-PAST_DUE_16_30 { @apply badge-warning text-warning-content; }
+        .note-status-DEFAULTED { @apply bg-black text-white; }
         .note-status-COMPLETED { @apply badge-info text-info-content; }
         .note-status-default { @apply badge-ghost; }
         /* Layout grid for the collapsed card view */
@@ -35,14 +37,12 @@
 <main class="flex-grow container mx-auto p-2 sm:p-4 lg:p-6">
     <div class="mb-6 mt-2">
         <h2 class="text-2xl lg:text-3xl font-bold text-center sm:text-left">
-            My Notes 
-            {% if total_count is defined %}
-                <span class="text-base-content/50 font-normal text-2xl">({{ total_count }})</span>
-            {% endif %}
+            My Notes <span id="notes-counter" class="text-base-content/50 font-normal text-2xl"></span>
         </h2>
     </div>
+
     <div class="bg-base-100 p-4 rounded-xl shadow-lg mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div>
                 <label for="filterNoteStatus" class="label-text pb-1">Note Status</label>
                 <select id="filterNoteStatus" class="select select-bordered select-sm w-full">
@@ -50,32 +50,43 @@
                     <option value="CURRENT">Current</option>
                     <option value="LATE">Late</option>
                     <option value="COMPLETED">Completed</option>
+                    <option value="DEFAULTED">Defaulted</option>
                 </select>
             </div>
             <div>
                 <label for="filterNoteRating" class="label-text pb-1">Prosper Rating</label>
                 <select id="filterNoteRating" class="select select-bordered select-sm w-full">
                     <option value="">All Ratings</option>
-                    <option value="A">A</option><option value="B">B</option><option value="C">C</option>
-                    <option value="D">D</option><option value="E">E</option>
+                    <option value="AA">AA</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="HR">HR</option>
                 </select>
             </div>
             <div>
                 <label for="sortNoteCriteria" class="label-text pb-1">Sort By</label>
                 <select id="sortNoteCriteria" class="select select-bordered select-sm w-full">
-                    <option value="origination_date_desc" selected>Orig. Date (Newest)</option>
+                    <option value="origination_date_desc" selected>Orig. Date (Newest First)</option>
+                    <option value="origination_date_asc">Orig. Date (Oldest First)</option>
                     <option value="principal_balance_desc">Balance (High to Low)</option>
-                    <option value="next_payment_date_asc">Next Payment (Soonest)</option>
+                    <option value="days_past_due_desc">Days Past Due (Most)</option>
+                    <option value="default">Original Order</option>
                 </select>
             </div>
-            <div> <button id="resetNoteFilters" class="btn btn-ghost btn-sm w-full md:w-auto">Reset</button> </div>
+            <div>
+                <label for="rows-per-page-notes" class="label-text pb-1">Show</label>
+                <select id="rows-per-page-notes" class="select select-bordered select-sm w-full">
+                    <option value="10">10 per page</option>
+                    <option value="25" selected>25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100">100 per page</option>
+                </select>
+            </div>
+            <div> <button id="resetNoteFilters" class="btn btn-ghost btn-sm w-full md:w-auto">Reset Filters</button> </div>
         </div>
     </div>
 
     <div id="notesContainer" class="space-y-4">
     {% if data and data.result %}
         {% for note in data.result %}
-            <div class="note-card-item"
+            <div class="note-card-item" style="display: none;"
                  data-status="{{ note.note_status_description|upper|replace(' ', '_')|replace('.', '')|e if note.note_status_description else '' }}"
                  data-rating="{{ note.prosper_rating|upper if note.prosper_rating else '' }}"
                  data-balance="{{ note.principal_balance_pro_rata_share }}"
@@ -91,49 +102,145 @@
     {% else %}
         <div class="text-center py-10 bg-base-100 rounded-xl shadow"><p class="text-xl text-gray-500">No owned notes found in cache.</p></div>
     {% endif %}
-    <div id="noNotesMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;">
-        <p class="text-xl text-gray-500">No notes match your criteria.</p>
     </div>
-    </div> 
+    <div id="noNotesMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;"><p class="text-xl text-gray-500">No notes match your criteria.</p></div>
+    <div id="pagination-controls-notes" class="flex justify-center items-center gap-1 mt-8 pagination"></div>
 </main>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const filterStatusSelect = document.getElementById('filterNoteStatus');
-    const filterRatingSelect = document.getElementById('filterNoteRating');
-    const sortCriteriaSelect = document.getElementById('sortNoteCriteria');
-    const notesContainer = document.getElementById('notesContainer');
-    const resetFiltersButton = document.getElementById('resetNoteFilters');
-    const noResultsMessageEl = document.getElementById('noNotesMessage');
+    const controls = {
+        statusSelect: document.getElementById('filterNoteStatus'),
+        ratingSelect: document.getElementById('filterNoteRating'),
+        sortSelect: document.getElementById('sortNoteCriteria'),
+        rowsPerPageSelect: document.getElementById('rows-per-page-notes'),
+        resetButton: document.getElementById('resetNoteFilters'),
+        container: document.getElementById('notesContainer'),
+        noResultsMessage: document.getElementById('noNotesMessage'),
+        counter: document.getElementById('notes-counter'),
+        paginationControls: document.getElementById('pagination-controls-notes')
+    };
 
-    if (!filterStatusSelect) return; // Stop script if controls aren't on this page
+    if (!controls.container || !controls.statusSelect) return;
 
-    const originalNotes = Array.from(notesContainer.querySelectorAll('.note-card-item'));
+    const originalNotes = Array.from(controls.container.querySelectorAll('.note-card-item'));
+    let currentPage = 1;
+    let filteredAndSortedNotes = [];
 
-    function applyNoteFiltersAndSort() {
-        const statusFilter = filterStatusSelect.value;
-        const ratingFilter = filterRatingSelect.value;
-        let items = Array.from(originalNotes); 
+    function getPaginationModel(currentPage, totalPages) {
+        if (totalPages <= 7) { return Array.from({ length: totalPages }, (_, i) => i + 1); }
+        const visiblePages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+        let validPages = [];
+        visiblePages.forEach(p => { if (p > 0 && p <= totalPages) { validPages.push(p); } });
+        validPages.sort((a, b) => a - b);
+        const paginationItems = [];
+        let lastPage = 0;
+        for (const page of validPages) {
+            if (lastPage !== 0 && page - lastPage > 1) { paginationItems.push('...'); }
+            paginationItems.push(page);
+            lastPage = page;
+        }
+        return paginationItems;
+    }
 
-        items.forEach(item => {
+    function runUpdate() {
+        const statusFilter = controls.statusSelect.value;
+        const ratingFilter = controls.ratingSelect.value;
+        const sortValue = controls.sortSelect.value;
+        
+        filteredAndSortedNotes = originalNotes.filter(item => {
             const itemStatus = item.dataset.status;
             const itemRating = item.dataset.rating;
-            const statusMatch = statusFilter === '' || itemStatus === statusFilter;
+            const statusMatch = statusFilter === '' || itemStatus.startsWith(statusFilter);
             const ratingMatch = ratingFilter === '' || itemRating === ratingFilter;
-            
-            item.style.display = (statusMatch && ratingMatch) ? '' : 'none';
+            return statusMatch && ratingMatch;
         });
+
+        if (sortValue !== 'default') {
+            const [keyString, order] = sortValue.split('_');
+            const datasetAttr = keyString.replace(/_(\w)/g, (match, letter) => letter.toUpperCase());
+            
+            if(datasetAttr){ 
+                filteredAndSortedNotes.sort((a, b) => {
+                    let valA, valB;
+                    if (datasetAttr === 'originationDate' || datasetAttr === 'nextPaymentDate') {
+                        valA = new Date(a.dataset[datasetAttr]).getTime();
+                        valB = new Date(b.dataset[datasetAttr]).getTime();
+                    } else { 
+                        valA = parseFloat(a.dataset[datasetAttr]); 
+                        valB = parseFloat(b.dataset[datasetAttr]);
+                    }
+                    if (isNaN(valA)) return 1; if (isNaN(valB)) return -1; 
+                    let c = valA < valB ? -1 : (valA > valB ? 1 : 0);
+                    return order === 'asc' ? c : -c;
+                });
+            }
+        }
+        
+        currentPage = 1;
+        renderPage();
     }
-    filterStatusSelect.addEventListener('change', applyNoteFiltersAndSort);
-    filterRatingSelect.addEventListener('change', applyNoteFiltersAndSort);
-    resetFiltersButton.addEventListener('click', () => {
-        filterStatusSelect.value = '';
-        filterRatingSelect.value = '';
-        applyNoteFiltersAndSort();
+    
+    function renderPage() {
+        const rowsPerPage = parseInt(controls.rowsPerPageSelect.value, 10);
+        const totalItems = filteredAndSortedNotes.length;
+        const totalPages = Math.ceil(totalItems / rowsPerPage) || 1;
+        currentPage = Math.min(currentPage, totalPages);
+
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        const itemsForCurrentPage = filteredAndSortedNotes.slice(startIndex, endIndex);
+
+        originalNotes.forEach(item => item.style.display = 'none');
+        itemsForCurrentPage.forEach(item => item.style.display = 'block');
+        
+        const filtersApplied = controls.statusSelect.value !== '' || controls.ratingSelect.value !== '';
+        controls.counter.innerHTML = filtersApplied ? `(Showing ${totalItems} / ${originalNotes.length} total)` : `(${originalNotes.length} total)`;
+        controls.noResultsMessage.style.display = totalItems === 0 ? 'block' : 'none';
+
+        controls.paginationControls.innerHTML = '';
+        if (totalPages > 1) {
+            const paginationItems = getPaginationModel(currentPage, totalPages);
+            const prevButton = document.createElement('button'); prevButton.className = 'btn btn-sm'; prevButton.textContent = '«';
+            if (currentPage === 1) prevButton.disabled = true;
+            prevButton.addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderPage(); } });
+            controls.paginationControls.appendChild(prevButton);
+
+            paginationItems.forEach(item => {
+                if (item === '...') {
+                    const ellipsis = document.createElement('span'); ellipsis.className = 'btn btn-sm btn-disabled'; ellipsis.textContent = '...';
+                    controls.paginationControls.appendChild(ellipsis);
+                } else {
+                    const pageButton = document.createElement('button');
+                    pageButton.className = `btn btn-sm ${item === currentPage ? 'btn-active' : ''}`;
+                    pageButton.textContent = item;
+                    pageButton.addEventListener('click', () => { currentPage = item; renderPage(); });
+                    controls.paginationControls.appendChild(pageButton);
+                }
+            });
+
+            const nextButton = document.createElement('button'); nextButton.className = 'btn btn-sm'; nextButton.textContent = '»';
+            if (currentPage === totalPages) nextButton.disabled = true;
+            nextButton.addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; renderPage(); } });
+            controls.paginationControls.appendChild(nextButton);
+        }
+    }
+    
+    controls.statusSelect.addEventListener('change', runUpdate);
+    controls.ratingSelect.addEventListener('change', runUpdate);
+    controls.sortSelect.addEventListener('change', runUpdate);
+    controls.rowsPerPageSelect.addEventListener('change', runUpdate);
+    controls.resetButton.addEventListener('click', () => {
+        controls.statusSelect.value = '';
+        controls.ratingSelect.value = '';
+        controls.sortSelect.value = 'origination_date_desc';
+        controls.rowsPerPageSelect.value = '25';
+        runUpdate();
     });
-    applyNoteFiltersAndSort();
+
+    runUpdate();
 });
 </script>
 {% endblock %}
