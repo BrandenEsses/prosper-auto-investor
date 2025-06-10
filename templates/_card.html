@@ -9,7 +9,6 @@
         {# --- RENDER AN AVAILABLE LISTING CARD --- #}
         <div class="bg-base-100 shadow-lg rounded-xl border-l-4 border-primary">
             <div class="flex items-start space-x-3 md:space-x-4 p-3 md:p-4">
-                <input type="radio" name="selected_listing_main_group" value="{{ item.listing_number }}" class="radio radio-primary radio-sm sm:radio-md mt-3 md:mt-4 shrink-0">
                 <div class="flex-grow collapse collapse-arrow min-w-0">
                     <input type="checkbox" aria-label="Toggle details for listing {{ item.listing_number }}" /> 
                     <div class="collapse-title !p-0 !pr-8 md:!pr-10">
@@ -17,19 +16,20 @@
                             <div class="rating-badge rating-{{ item.prosper_rating|upper if item.prosper_rating else 'default' }}">{{ item.prosper_rating|upper if item.prosper_rating else 'N/A' }}</div>
                             <div class="min-w-0">
                                 <div class="flex flex-col text-sm"><span class="font-semibold text-neutral-focus">Listed: {{ item.listing_creation_date.split(' ')[0] if item.listing_creation_date else 'N/A' }}</span></div>
-                                <div class="flex flex-col min-w-0"><span class="font-semibold text-base md:text-lg text-neutral-focus truncate">${{ "%.2f"|format(item.listing_amount) }}</span> <span class="text-xs text-gray-600 truncate">{{ item.listing_title }}</span> {% if item.invested %}<span class="text-xs text-primary-focus font-semibold">You've already invested</span>{% endif %}</div>
+                                <div class="flex flex-col min-w-0"><span class="font-semibold text-base md:text-lg text-neutral-focus truncate">{{ item.listing_amount | currency }}</span> <span class="text-xs text-gray-600 truncate">{{ item.listing_title }}</span><span class="text-xs text-gray-400 mt-1">Listing #{{ item.listing_number }}</span></div>
                                 <div class="term-yield-md-stack flex flex-col lg:flex-row lg:items-center lg:space-x-4"><div class="text-sm text-neutral-focus">{{ (item.listing_term / 12)|int }} Years</div><div class="text-sm font-semibold text-neutral-focus">{{ "%.2f%%"|format(item.lender_yield * 100) }} Yield</div></div>
-                                <div class="w-full min-w-0"><progress class="progress progress-accent w-full mb-1" value="{{ (item.percent_funded * 100)|int }}" max="100"></progress><div class="text-xs text-gray-600 flex justify-between flex-wrap"><span class="whitespace-nowrap">${{ "%.0f"|format(item.amount_remaining) }} left</span></div></div>
+                                <div class="w-full min-w-0"><progress class="progress progress-accent w-full mb-1" value="{{ (item.percent_funded * 100)|int }}" max="100"></progress><div class="text-xs text-gray-600 flex justify-between flex-wrap"><span class="whitespace-nowrap">{{ item.amount_remaining | currency }} left</span></div></div>
                             </div>
                         </div>
                     </div>
                     <div class="collapse-content bg-base-200/60 p-3 md:p-4 !pb-2 rounded-b-lg -mt-1">
+                        {# --- EXPANDED VIEW FOR LISTING --- #}
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
                             <div><span class="text-xs text-gray-500 block">Prosper Score</span><span class="font-medium text-neutral-focus">{{ item.prosper_score }}</span></div>
                             <div><span class="text-xs text-gray-500 block">FICO Range</span><span class="font-medium text-neutral-focus">{{ item.credit_bureau_values_transunion_indexed.fico_score if item.credit_bureau_values_transunion_indexed else 'N/A' }}</span></div>
                             <div><span class="text-xs text-gray-500 block">Debt/Income Ratio</span><span class="font-medium text-neutral-focus">{{ "%.2f%%"|format(item.dti_wprosper_loan * 100) }}</span></div>
                             <div><span class="text-xs text-gray-500 block">Has Mortgage</span><span class="font-medium text-neutral-focus">{{ 'Yes' if item.has_mortgage else 'No' }}</span></div>
-                            <div><span class="text-xs text-gray-500 block">Revolving Credit Balance</span><span class="font-medium text-neutral-focus">${{ "{:,.0f}".format(item.credit_bureau_values_transunion_indexed.re101s_revolving_balance) if item.credit_bureau_values_transunion_indexed and item.credit_bureau_values_transunion_indexed.re101s_revolving_balance else 'N/A' }}</span></div>
+                            <div><span class="text-xs text-gray-500 block">Revolving Credit Balance</span><span class="font-medium text-neutral-focus">{{ item.credit_bureau_values_transunion_indexed.re101s_revolving_balance | currency if item.credit_bureau_values_transunion_indexed and item.credit_bureau_values_transunion_indexed.re101s_revolving_balance else 'N/A' }}</span></div>
                             <div><span class="text-xs text-gray-500 block">Bankcard Utilization</span><span class="font-medium text-neutral-focus">{{ item.credit_bureau_values_transunion_indexed.bc34s_bankcard_utilization }}%</span></div>
                         </div>
                         <div class="mt-4 flex justify-end items-center"><span class="text-xs text-gray-400">Listing ID: {{ item.listing_number }}</span></div>
@@ -41,21 +41,21 @@
         {# --- RENDER AN OWNED NOTE CARD --- #}
         <div class="bg-base-100 shadow-lg rounded-xl border-l-4 border-secondary">
             <div class="flex items-start space-x-3 md:space-x-4 p-3 md:p-4">
-                <input type="radio" name="selected_note_main_group" value="{{ item.loan_note_id }}" class="radio radio-secondary radio-sm sm:radio-md mt-3 md:mt-4 shrink-0">
                 <div class="flex-grow collapse collapse-arrow min-w-0">
                     <input type="checkbox" aria-label="Toggle details for note {{ item.loan_note_id }}" /> 
                     <div class="collapse-title !p-0 !pr-8 md:!pr-10">
                         <div class="note-card-title-grid py-1">
                             <div class="flex flex-col text-sm"><span class="font-semibold text-neutral-focus">Orig. {{ item.origination_date.split(' ')[0] if item.origination_date else 'N/A' }}</span><span class="text-xs text-gray-500">{{item.age_in_months}} months old</span></div>
                             <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-2"><span class="rating-badge rating-{{ item.prosper_rating|upper if item.prosper_rating else 'default' }} mb-1 sm:mb-0">{{ item.prosper_rating|upper if item.prosper_rating else 'N/A' }}</span><span class="note-status-badge note-status-{{ item.note_status_description|upper|replace(' ', '_')|replace('.', '') if item.note_status_description else 'default' }}">{{ item.note_status_description if item.note_status_description else 'N/A' }}</span></div>
-                            <div class="flex flex-col"><span class="font-semibold text-base md:text-lg text-neutral-focus">${{ "%.2f"|format(item.principal_balance_pro_rata_share) }}</span><span class="text-xs text-gray-500">Principal Balance</span></div>
-                            <div class="flex flex-col"><span class="text-sm font-semibold text-neutral-focus">{{ "%.2f%%"|format(item.lender_yield * 100) }} Yield</span>{% if item.next_payment_due_date %}<span class="text-xs text-gray-600">Next: {{ item.next_payment_due_date.split(' ')[0] }} (${{ "%.2f"|format(item.next_payment_due_amount_pro_rata_share) }})</span>{% else %}<span class="text-xs text-gray-500 italic">No upcoming pmt</span>{% endif %}</div>
+                            <div class="flex flex-col"><span class="font-semibold text-base md:text-lg text-neutral-focus">{{ item.principal_balance_pro_rata_share | currency }}</span><span class="text-xs text-gray-500">Principal Balance</span><span class="text-xs text-gray-400 mt-1">Note ID: {{ item.loan_note_id }}</span></div>
+                            <div class="flex flex-col"><span class="text-sm font-semibold text-neutral-focus">{{ "%.2f%%"|format(item.lender_yield * 100) }} Yield</span>{% if item.next_payment_due_date %}<span class="text-xs text-gray-600">Next: {{ item.next_payment_due_date.split(' ')[0] }} ({{ item.next_payment_due_amount_pro_rata_share | currency }})</span>{% else %}<span class="text-xs text-gray-500 italic">No upcoming pmt</span>{% endif %}</div>
                         </div>
                     </div>
                     <div class="collapse-content bg-base-200/60 p-3 md:p-4 !pb-2 rounded-b-lg -mt-1">
+                        {# --- EXPANDED VIEW FOR NOTE --- #}
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 text-sm">
-                            <div><h5 class="font-semibold text-neutral-600 mb-1">Loan Terms</h5><p>Orig. Amount: <span class="font-medium text-neutral-focus">${{ "%.2f"|format(item.amount_borrowed) }}</span></p><p>Term: <span class="font-medium text-neutral-focus">{{ (item.term / 12)|int }} Years</span></p><p>Borrower Rate: <span class="font-medium text-neutral-focus">{{ "%.2f%%"|format(item.borrower_rate * 100) }}</span></p></div>
-                            <div><h5 class="font-semibold text-neutral-600 mb-1">Payment Status</h5><p>Days Past Due: <span class="font-medium {{ 'text-error' if item.days_past_due > 0 else 'text-neutral-focus' }}">{{ item.days_past_due }}</span></p><p>Interest Paid: <span class="font-medium text-neutral-focus">${{ "%.2f"|format(item.interest_paid_pro_rata_share) }}</span></p><p>Principal Paid: <span class="font-medium text-neutral-focus">${{ "%.2f"|format(item.principal_paid_pro_rata_share) }}</span></p><p>Accrued Interest: <span class="font-medium text-neutral-focus">${{ "%.2f"|format(item.accrued_interest) }}</span></p></div>
+                            <div><h5 class="font-semibold text-neutral-600 mb-1">Loan Terms</h5><p>Orig. Amount: <span class="font-medium text-neutral-focus">{{ item.amount_borrowed | currency }}</span></p><p>Term: <span class="font-medium text-neutral-focus">{{ (item.term / 12)|int }} Years</span></p><p>Borrower Rate: <span class="font-medium text-neutral-focus">{{ "%.2f%%"|format(item.borrower_rate * 100) }}</span></p></div>
+                            <div><h5 class="font-semibold text-neutral-600 mb-1">Your Note's Status</h5><p>Days Past Due: <span class="font-medium {{ 'text-error' if item.days_past_due > 0 else 'text-neutral-focus' }}">{{ item.days_past_due }}</span></p><p>Interest Paid: <span class="font-medium text-neutral-focus">{{ item.interest_paid_pro_rata_share | currency }}</span></p><p>Principal Paid: <span class="font-medium text-neutral-focus">{{ item.principal_paid_pro_rata_share | currency }}</span></p><p>Accrued Interest: <span class="font-medium text-neutral-focus">{{ item.accrued_interest | currency }}</span></p></div>
                             <div><h5 class="font-semibold text-neutral-600 mb-1">Identifiers</h5><p>Note ID: <span class="font-medium text-neutral-focus">{{ item.loan_note_id }}</span></p><p>Loan No: <span class="font-medium text-neutral-focus">{{ item.loan_number }}</span></p><p>Listing No: <span class="font-medium text-neutral-focus">{{ item.listing_number }}</span></p></div>
                         </div>
                     </div>

@@ -16,7 +16,7 @@
           }
         },
         daisyui: { 
-          themes: ["cupcake", "light", "dark"],
+          themes: ["cupcake"],
           forcedTheme: "cupcake", 
         },
       }
@@ -46,7 +46,7 @@
 
     <div class="navbar bg-base-100 shadow-md sticky top-0 z-50">
       <div class="navbar-start">
-        <a href="{{ url_for('index') }}" class="btn btn-ghost text-xl">Loan Data Viewer</a>
+        <a href="{{ url_for('index') }}" class="btn btn-ghost text-xl">Auto-Investor</a>
       </div>
       <div class="navbar-end">
         <ul class="menu menu-horizontal px-1">
@@ -89,7 +89,7 @@
             }
         }
 
-        // Find and auto-hide any flash messages that appear on a page
+        // Find and auto-hide any flash messages
         const flashMessages = document.querySelectorAll('#flash-message-container .alert');
         flashMessages.forEach(function(message) {
             setTimeout(() => {

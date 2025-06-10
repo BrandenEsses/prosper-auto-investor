@@ -1,0 +1,234 @@
+{% extends "page.html" %}
+
+{% block title %}Available Listings{% endblock %}
+
+{% block head_extra %}
+    <style>
+        .listing-card-item { animation: fadeIn 0.3s ease-out; }
+        .pagination .btn.btn-active { font-weight: bold; }
+        /* Styles needed for the listing cards displayed on this page */
+        .rating-badge { @apply badge badge-lg font-semibold text-base-content border-opacity-50; }
+        .rating-A { @apply badge-success bg-green-100 border-green-400 text-green-700; }
+        .rating-B { @apply badge-info bg-blue-100 border-blue-400 text-blue-700; }
+        .rating-C { @apply badge-warning bg-yellow-100 border-yellow-500 text-yellow-800; }
+        .rating-D { @apply bg-orange-100 border-orange-500 text-orange-700; }
+        .rating-E { @apply bg-red-100 border-red-500 text-red-700; }
+        .rating-default { @apply badge-ghost bg-gray-200 border-gray-400 text-gray-600; }
+        .verification-dot { @apply h-3 w-3 rounded-full inline-block mx-0.5; }
+        .info-icon { @apply inline-block ml-1 text-xs text-gray-400 cursor-help; }
+        .custom-collapse-title-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: center; width: 100%; }
+        .custom-collapse-title-grid > div:last-child { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+        @media (min-width: 1024px) { .custom-collapse-title-grid > div:last-child { grid-template-columns: minmax(0,0.8fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr); } }
+        @media (min-width: 768px) and (max-width: 1023px) { .custom-collapse-title-grid > div:last-child { grid-template-columns: minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr); } }
+    </style>
+{% endblock %}
+
+{% block content %}
+<main class="flex-grow container mx-auto p-2 sm:p-4 lg:p-6">
+    <div class="mb-6 mt-2">
+        <h2 class="text-2xl lg:text-3xl font-bold text-center sm:text-left">
+            Available Listings <span id="listings-counter" class="text-base-content/50 font-normal text-2xl"></span>
+        </h2>
+    </div>
+
+    <div id="listings-filter-controls" class="bg-base-100 p-4 rounded-xl shadow-lg mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            <div>
+                <label for="filter-global-listings" class="label-text pb-1">Global Search</label>
+                <input type="text" id="filter-global-listings" placeholder="Search ID, title, rating..." class="input input-bordered input-sm w-full">
+            </div>
+            <div>
+                <label for="filter-rating-listings" class="label-text pb-1">Prosper Rating</label>
+                <select id="filter-rating-listings" class="select select-bordered select-sm w-full">
+                    <option value="">All Ratings</option>
+                    <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+                    <option value="D">D</option><option value="E">E</option><option value="HR">HR</option>
+                </select>
+            </div>
+            <div>
+                <label for="sort-criteria-listings" class="label-text pb-1">Sort By</label>
+                <select id="sort-criteria-listings" class="select select-bordered select-sm w-full">
+                    <option value="creation_date_desc" selected>Newest First</option>
+                    <option value="creation_date_asc">Oldest First</option>
+                    <option value="yield_desc">Yield (High-Low)</option>
+                    <option value="amount_desc">Amount (High-Low)</option>
+                </select>
+            </div>
+            <div>
+                <label for="rows-per-page-listings" class="label-text pb-1">Show</label>
+                <select id="rows-per-page-listings" class="select select-bordered select-sm w-full">
+                    <option value="10">10 per page</option>
+                    <option value="25" selected>25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100">100 per page</option>
+                </select>
+            </div>
+            <div>
+                <button id="reset-filters-listings" class="btn btn-ghost btn-sm w-full md:w-auto">Reset Filters</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="listingsContainer" class="space-y-4">
+    {% if data and data.result %}
+        {% for listing in data.result %}
+            <div class="listing-card-item" style="display: none;"
+                 data-searchable-content="{{ [listing.listing_title, listing.listing_number, listing.prosper_rating]|map('string')|join(' ')|lower }}"
+                 data-rating="{{ listing.prosper_rating|upper if listing.prosper_rating else '' }}"
+                 data-yield="{{ listing.lender_yield }}"
+                 data-amount="{{ listing.listing_amount }}"
+                 data-creation-date="{{ listing.listing_creation_date|e if listing.listing_creation_date else '1900-01-01' }}">
+                {% with item=listing, card_type='listing' %}
+                    {% include '_card.html' %}
+                {% endwith %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="text-center py-10 bg-base-100 rounded-xl shadow"><p class="text-xl text-gray-500">No available listings found in cache.</p></div>
+    {% endif %}
+    <div id="noListingsMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;">
+        <p class="text-xl text-gray-500">No listings match your criteria.</p>
+    </div>
+    </div>
+    
+    <div id="pagination-controls-listings" class="flex justify-center items-center gap-2 mt-8"></div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const controls = {
+        globalSearch: document.getElementById('filter-global-listings'),
+        ratingSelect: document.getElementById('filter-rating-listings'),
+        sortSelect: document.getElementById('sort-criteria-listings'),
+        rowsPerPageSelect: document.getElementById('rows-per-page-listings'),
+        resetButton: document.getElementById('reset-filters-listings'),
+        container: document.getElementById('listingsContainer'),
+        noResultsMessage: document.getElementById('noListingsMessage'),
+        counter: document.getElementById('listings-counter'),
+        paginationControls: document.getElementById('pagination-controls-listings')
+    };
+
+    if (!controls.container) return;
+
+    const originalListings = Array.from(controls.container.querySelectorAll('.listing-card-item'));
+    let currentPage = 1;
+    let filteredAndSortedListings = [];
+
+    function runUpdate() {
+        // --- 1. Filter and Sort the original list ---
+        const globalSearchTerm = controls.globalSearch.value.toLowerCase().trim();
+        const ratingFilter = controls.ratingSelect.value;
+        const sortValue = controls.sortSelect.value;
+        
+        filteredAndSortedListings = originalListings.filter(item => {
+            const searchableContent = item.dataset.searchableContent || '';
+            const rating = item.dataset.rating;
+            const globalMatch = globalSearchTerm === '' || searchableContent.includes(globalSearchTerm);
+            const ratingMatch = ratingFilter === '' || rating === ratingFilter;
+            return globalMatch && ratingMatch;
+        });
+
+        if (sortValue !== 'default') {
+            const [key, order] = sortValue.split('_');
+            filteredAndSortedListings.sort((a, b) => {
+                let valA, valB;
+                if (key === 'creationDate') {
+                    valA = new Date(a.dataset.creationDate).getTime();
+                    valB = new Date(b.dataset.creationDate).getTime();
+                } else {
+                    valA = parseFloat(a.dataset[key]); valB = parseFloat(b.dataset[key]);
+                }
+                if (isNaN(valA)) return 1; if (isNaN(valB)) return -1;
+                let comparison = valA < valB ? -1 : (valA > valB ? 1 : 0);
+                return order === 'asc' ? comparison : -comparison;
+            });
+        }
+        
+        // After filtering, always go back to the first page
+        currentPage = 1;
+        
+        // --- 2. Update the DOM with the new filtered/sorted list ---
+        renderPage();
+    }
+    
+    function renderPage() {
+        // --- 3. Handle Pagination Logic ---
+        const rowsPerPage = parseInt(controls.rowsPerPageSelect.value, 10);
+        const totalItems = filteredAndSortedListings.length;
+        const totalPages = Math.ceil(totalItems / rowsPerPage);
+        
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        const itemsForCurrentPage = filteredAndSortedListings.slice(startIndex, endIndex);
+
+        // --- 4. Update the DOM Display ---
+        originalListings.forEach(item => item.style.display = 'none');
+        itemsForCurrentPage.forEach(item => item.style.display = 'block');
+        
+        // --- 5. Update Counters ---
+        const filtersApplied = controls.globalSearch.value !== '' || controls.ratingSelect.value !== '';
+        if (filtersApplied) {
+            controls.counter.innerHTML = `(Showing ${totalItems} / ${originalListings.length} total)`;
+        } else {
+            controls.counter.innerHTML = `(${originalListings.length} total)`;
+        }
+        
+        controls.noResultsMessage.style.display = totalItems === 0 ? 'block' : 'none';
+
+        // --- 6. Render Pagination Controls ---
+        controls.paginationControls.innerHTML = '';
+        if (totalPages > 1) {
+            // Prev Button
+            const prevButton = document.createElement('button');
+            prevButton.className = 'btn btn-sm';
+            prevButton.textContent = '«';
+            if (currentPage === 1) prevButton.disabled = true;
+            prevButton.addEventListener('click', () => {
+                if (currentPage > 1) { currentPage--; renderPage(); }
+            });
+            controls.paginationControls.appendChild(prevButton);
+
+            // Page Buttons
+            for (let i = 1; i <= totalPages; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.className = `btn btn-sm ${i === currentPage ? 'btn-active' : ''}`;
+                pageButton.textContent = i;
+                pageButton.addEventListener('click', () => {
+                    currentPage = i;
+                    renderPage();
+                });
+                controls.paginationControls.appendChild(pageButton);
+            }
+
+            // Next Button
+            const nextButton = document.createElement('button');
+            nextButton.className = 'btn btn-sm';
+            nextButton.textContent = '»';
+            if (currentPage === totalPages) nextButton.disabled = true;
+            nextButton.addEventListener('click', () => {
+                if (currentPage < totalPages) { currentPage++; renderPage(); }
+            });
+            controls.paginationControls.appendChild(nextButton);
+        }
+    }
+    
+    // --- Attach Event Listeners ---
+    controls.globalSearch.addEventListener('input', runUpdate);
+    controls.ratingSelect.addEventListener('change', runUpdate);
+    controls.sortSelect.addEventListener('change', runUpdate);
+    controls.rowsPerPageSelect.addEventListener('change', runUpdate);
+    controls.resetButton.addEventListener('click', () => {
+        controls.globalSearch.value = '';
+        controls.ratingSelect.value = '';
+        controls.sortSelect.value = 'creation_date_desc';
+        controls.rowsPerPageSelect.value = '25';
+        runUpdate();
+    });
+
+    // --- Initial Run ---
+    runUpdate();
+});
+</script>
+{% endblock %}

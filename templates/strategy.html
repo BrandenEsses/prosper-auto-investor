@@ -7,7 +7,8 @@
 {% block head_extra %}
     <style>
         /* All necessary styles for this page */
-        .listing-card-item { } /* Keep empty for JS selector */
+        .listing-card-item { animation: fadeIn 0.3s ease-out; }
+        .pagination .btn.btn-active { font-weight: bold; }
         .rating-badge { @apply badge badge-lg font-semibold text-base-content border-opacity-50; }
         .rating-A { @apply badge-success bg-green-100 border-green-400 text-green-700; }
         .rating-B { @apply badge-info bg-blue-100 border-blue-400 text-blue-700; }
@@ -35,6 +36,18 @@
         <p class="text-base-content/70">Adjust criteria on the left to see a live preview of matching loans on the right, then save your strategy.</p>
     </div>
 
+    <div id="flash-message-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-success shadow-lg mb-4">
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 lg:gap-8">
         <aside class="lg:col-span-1 xl:col-span-1 mb-8 lg:mb-0">
             <div class="sticky-form-container">
@@ -54,11 +67,12 @@
         </aside>
 
         <section class="lg:col-span-2 xl:col-span-3">
-            <div id="resultsHeader" class="flex flex-wrap gap-4 justify-between items-center mb-4"><p>Showing <strong id="resultsCount">0</strong> matching loans.</p><div class="flex items-center gap-2"><label for="sortListings" class="label-text">Sort By:</label><select id="sortListings" class="select select-bordered select-sm"><option value="creation_date_desc" selected>Date Listed (Newest)</option><option value="yield_desc">Yield (High to Low)</option><option value="amount_desc">Amount (High to Low)</option><option value="default">Original Order</option></select></div></div>
+            <div id="resultsHeader" class="flex flex-wrap gap-4 justify-between items-center mb-4"><p>Showing <strong id="resultsCount">0</strong> matching loans.</p><div class="flex items-center gap-4"><div class="flex items-center gap-2"><label for="rowsPerPage" class="label-text">Show:</label><select id="rowsPerPage" class="select select-bordered select-sm"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option></select></div><div class="flex items-center gap-2"><label for="sortListings" class="label-text">Sort By:</label><select id="sortListings" class="select select-bordered select-sm"><option value="creation_date_desc" selected>Date Listed (Newest)</option><option value="yield_desc">Yield (High to Low)</option><option value="amount_desc">Amount (High to Low)</option></select></div></div></div>
             <div id="listingsContainer" class="space-y-4">
                 {% if listings_data and listings_data.result %}
                     {% for listing in listings_data.result %}
                     <div class="listing-card-item"
+                         data-id="{{ listing.listing_number }}"
                          data-rating="{{ listing.prosper_rating|upper if listing.prosper_rating else '' }}"
                          data-fico="{{ listing.credit_bureau_values_transunion_indexed.fico_score.split('-')[0]|trim if listing.credit_bureau_values_transunion_indexed and listing.credit_bureau_values_transunion_indexed.fico_score else 0 }}"
                          data-borrower-rate="{{ listing.borrower_rate if listing.borrower_rate is number else -1 }}"
@@ -77,8 +91,9 @@
                     </div>
                     {% endfor %}
                 {% endif %}
-                <div id="noListingsMessage" class="text-center py-10 bg-base-100 rounded-xl shadow" style="display: none;"><p class="text-xl text-gray-500">No listings match your criteria.</p></div>
             </div>
+            <div id="noListingsMessage" class="text-center py-10" style="display: none;"><p class="text-xl text-gray-500">No listings match your criteria.</p></div>
+            <div id="paginationControls" class="flex justify-center items-center gap-2 mt-8 pagination"></div>
         </section>
     </div>
 </main>
@@ -89,148 +104,134 @@
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('liveCriteriaForm');
     const sortSelect = document.getElementById('sortListings');
+    const rowsPerPageSelect = document.getElementById('rowsPerPage');
     const listingsContainer = document.getElementById('listingsContainer');
     const noResultsMessageEl = document.getElementById('noListingsMessage');
     const resultsCountEl = document.getElementById('resultsCount');
     const resetFiltersButton = document.getElementById('resetLiveFilters');
+    const paginationControls = document.getElementById('paginationControls');
 
-    if (!form) return; // Stop if form doesn't exist on the page
-
-    const originalListings = Array.from(listingsContainer.querySelectorAll('.listing-card-item'));
-
-    function applyFiltersAndSort() {
-        const criteria = {
-            prosper_rating: Array.from(form.querySelectorAll('input[name="prosper_rating"]:checked')).map(cb => cb.value),
-            employment_status: Array.from(form.querySelectorAll('input[name="employment_status"]:checked')).map(cb => cb.value),
-            listing_category: Array.from(form.querySelectorAll('input[name="listing_category"]:checked')).map(cb => parseInt(cb.value)),
-            borrower_state: Array.from(form.querySelectorAll('input[name="borrower_state"]:checked')).map(cb => cb.value),
-            occupation: Array.from(form.querySelectorAll('input[name="occupation"]:checked')).map(cb => cb.value),
-            min_fico: parseFloat(form.querySelector('input[name="min_fico"]').value) || null,
-            max_fico: parseFloat(form.querySelector('input[name="max_fico"]').value) || null,
-            min_at09s: parseFloat(form.querySelector('input[name="min_at09s"]').value) || null,
-            max_at09s: parseFloat(form.querySelector('input[name="max_at09s"]').value) || null,
-            min_g237s: parseFloat(form.querySelector('input[name="min_g237s"]').value) || null,
-            max_g237s: parseFloat(form.querySelector('input[name="max_g237s"]').value) || null,
-            min_borrower_rate: (parseFloat(form.querySelector('input[name="min_borrower_rate"]').value) / 100.0) || null,
-            max_borrower_rate: (parseFloat(form.querySelector('input[name="max_borrower_rate"]').value) / 100.0) || null,
-            min_loan_amount: parseFloat(form.querySelector('input[name="min_loan_amount"]').value) || null,
-            max_loan_amount: parseFloat(form.querySelector('input[name="max_loan_amount"]').value) || null,
-            min_months_employed: parseFloat(form.querySelector('input[name="min_months_employed"]').value) || null,
-            max_months_employed: parseFloat(form.querySelector('input[name="max_months_employed"]').value) || null,
-        };
-
-        let visibleItems = [];
-
-        originalListings.forEach(item => {
-            const data = item.dataset;
-            let isMatch = true;
-
-            // This direct show/hide approach is simpler to debug.
-            // We assume it's a match and then try to prove it false with "guard clauses".
-            if (!itemPassesFilters(data, criteria)) {
-                isMatch = false;
-            }
-            
-            item.style.display = isMatch ? '' : 'none';
-            if (isMatch) {
-                visibleItems.push(item);
-            }
-        });
-
-        resultsCountEl.textContent = visibleItems.length;
-        noResultsMessageEl.style.display = visibleItems.length > 0 ? 'none' : 'block';
-
-        // Sort the visible items and re-append them to the container to apply the order
-        const sortValue = sortSelect.value;
-        if (sortValue !== 'default') {
-            const parts = sortValue.split('_'); 
-            const order = parts.pop(); 
-            const keyString = parts.join('_');
-            let datasetAttr;
-            switch (keyString) { case 'creation_date': datasetAttr = 'creationDate'; break; case 'yield': datasetAttr = 'yield'; break; case 'amount': datasetAttr = 'amount'; break; default: datasetAttr = null; }
-            
-            if(datasetAttr){ 
-                visibleItems.sort((a, b) => {
-                    let valA_raw = a.dataset[datasetAttr]; let valB_raw = b.dataset[datasetAttr];
-                    let valA, valB;
-                    if (datasetAttr === 'creationDate') {
-                        valA = new Date(valA_raw).getTime(); valB = new Date(valB_raw).getTime();
-                    } else { 
-                        valA = parseFloat(valA_raw); valB = parseFloat(valB_raw); 
-                    }
-                    const isNaNA = isNaN(valA); const isNaNB = isNaN(valB);
-                    if (isNaNA && isNaNB) return 0; if (isNaNA) return 1; if (isNaNB) return -1; 
-                    let c = 0; if (valA < valB) c = -1; if (valA > valB) c = 1;
-                    return order === 'asc' ? c : -c;
-                });
-
-                // Re-append to apply sort order
-                visibleItems.forEach(sortedItem => listingsContainer.appendChild(sortedItem));
-            }
-        }
+    if (!form || !sortSelect || !listingsContainer || !noResultsMessageEl || !resultsCountEl || !resetFiltersButton || !paginationControls) {
+        console.error("CRITICAL SCRIPT ERROR: A required element for the strategy tool was not found. Please check your HTML for all necessary IDs.");
+        return; 
     }
 
-    function itemPassesFilters(data, criteria) {
-        // Parse data from the card's dataset
-        const itemFico = parseFloat(data.fico);
-        const itemAmount = parseFloat(data.amount);
-        const itemRate = parseFloat(data.borrowerRate);
-        const itemMonthsEmployed = parseFloat(data.monthsEmployed);
-        const itemAt09s = parseFloat(data.at09s);
-        const itemG237s = parseFloat(data.g237s);
-        const itemCategoryId = parseInt(data.listingCategoryId);
+    const originalListings = Array.from(listingsContainer.querySelectorAll('.listing-card-item'));
+    let currentPage = 1;
+    let filteredAndSortedListings = [];
 
-        // Checkbox/Multiselect filters
-        if (criteria.prosper_rating.length > 0 && !criteria.prosper_rating.includes(data.rating)) return false;
-        if (criteria.employment_status.length > 0 && !criteria.employment_status.includes(data.employmentStatus)) return false;
-        if (criteria.listing_category.length > 0 && !criteria.listing_category.includes(itemCategoryId)) return false;
-        if (criteria.borrower_state.length > 0 && !criteria.borrower_state.includes(data.borrowerState)) return false;
-        if (criteria.occupation.length > 0 && !criteria.occupation.includes(data.occupation)) return false;
+    function applyFiltersAndSort() {
+        const formData = new FormData(form);
+        const criteria = {
+            prosper_rating: formData.getAll('prosper_rating'),
+            employment_status: formData.getAll('employment_status'),
+            listing_category: formData.getAll('listing_category').map(Number),
+            borrower_state: formData.getAll('borrower_state'),
+            occupation: formData.getAll('occupation'),
+            min_fico: parseFloat(formData.get('min_fico')) || null,
+            max_fico: parseFloat(formData.get('max_fico')) || null,
+            min_at09s: parseFloat(formData.get('min_at09s')) || null,
+            max_at09s: parseFloat(formData.get('max_at09s')) || null,
+            min_g237s: parseFloat(formData.get('min_g237s')) || null,
+            max_g237s: parseFloat(formData.get('max_g237s')) || null,
+            min_borrower_rate: (parseFloat(formData.get('min_borrower_rate')) / 100.0) || null,
+            max_borrower_rate: (parseFloat(formData.get('max_borrower_rate')) / 100.0) || null,
+            min_loan_amount: parseFloat(formData.get('min_loan_amount')) || null,
+            max_loan_amount: parseFloat(formData.get('max_loan_amount')) || null,
+            min_months_employed: parseFloat(formData.get('min_months_employed')) || null,
+            max_months_employed: parseFloat(formData.get('max_months_employed')) || null,
+        };
 
-        // Min/Max Range Filters
-        if (criteria.min_fico && itemFico < criteria.min_fico) return false;
-        if (criteria.max_fico && itemFico > criteria.max_fico) return false;
+        filteredAndSortedListings = originalListings.filter(item => {
+            const data = item.dataset;
+            const itemFico = parseFloat(data.fico);
+            const itemAmount = parseFloat(data.amount);
+            const itemRate = parseFloat(data.borrowerRate);
+            const itemMonthsEmployed = parseFloat(data.monthsEmployed);
+            const itemAt09s = parseFloat(data.at09s);
+            const itemG237s = parseFloat(data.g237s);
+            const itemCategoryId = parseInt(data.listingCategoryId);
 
-        if (criteria.min_loan_amount && itemAmount < criteria.min_loan_amount) return false;
-        if (criteria.max_loan_amount && itemAmount > criteria.max_loan_amount) return false;
-
-        // For ranges with potential missing data (-1), fail if a filter is set AND data is missing or out of bounds.
-        if (criteria.min_borrower_rate || criteria.max_borrower_rate) {
-            if (itemRate < 0 || (criteria.min_borrower_rate && itemRate < criteria.min_borrower_rate) || (criteria.max_borrower_rate && itemRate > criteria.max_borrower_rate)) {
-                return false;
-            }
-        }
-        if (criteria.min_months_employed || criteria.max_months_employed) {
-            if (itemMonthsEmployed < 0 || (criteria.min_months_employed && itemMonthsEmployed < criteria.min_months_employed) || (criteria.max_months_employed && itemMonthsEmployed > criteria.max_months_employed)) {
-                return false;
-            }
-        }
-        if (criteria.min_at09s || criteria.max_at09s) {
-            if (itemAt09s < 0 || (criteria.min_at09s && itemAt09s < criteria.min_at09s) || (criteria.max_at09s && itemAt09s > criteria.max_at09s)) {
-                return false;
-            }
-        }
-        if (criteria.min_g237s || criteria.max_g237s) {
-            if (itemG237s < 0 || (criteria.min_g237s && itemG237s < criteria.min_g237s) || (criteria.max_g237s && itemG237s > criteria.max_g237s)) {
-                return false;
+            if (criteria.prosper_rating.length > 0 && !criteria.prosper_rating.includes(data.rating)) return false;
+            if (criteria.employment_status.length > 0 && !criteria.employment_status.includes(data.employmentStatus)) return false;
+            if (criteria.listing_category.length > 0 && !criteria.listing_category.includes(itemCategoryId)) return false;
+            if (criteria.borrower_state.length > 0 && !criteria.borrower_state.includes(data.borrowerState)) return false;
+            if (criteria.occupation.length > 0 && !criteria.occupation.includes(data.occupation)) return false;
+            if (criteria.min_fico && itemFico < criteria.min_fico) return false;
+            if (criteria.max_fico && itemFico > criteria.max_fico) return false;
+            if (criteria.min_loan_amount && itemAmount < criteria.min_loan_amount) return false;
+            if (criteria.max_loan_amount && itemAmount > criteria.max_loan_amount) return false;
+            if ((criteria.min_borrower_rate || criteria.max_borrower_rate) && (itemRate < 0 || (criteria.min_borrower_rate && itemRate < criteria.min_borrower_rate) || (criteria.max_borrower_rate && itemRate > criteria.max_borrower_rate))) return false;
+            if ((criteria.min_months_employed || criteria.max_months_employed) && (itemMonthsEmployed < 0 || (criteria.min_months_employed && itemMonthsEmployed < criteria.min_months_employed) || (criteria.max_months_employed && itemMonthsEmployed > criteria.max_months_employed))) return false;
+            if ((criteria.min_at09s || criteria.max_at09s) && (itemAt09s < 0 || (criteria.min_at09s && itemAt09s < criteria.min_at09s) || (criteria.max_at09s && itemAt09s > criteria.max_at09s))) return false;
+            if ((criteria.min_g237s || criteria.max_g237s) && (itemG237s < 0 || (criteria.min_g237s && itemG237s < criteria.min_g237s) || (criteria.max_g237s && itemG237s > criteria.max_g237s))) return false;
+            
+            return true;
+        });
+        
+        const sortValue = sortSelect.value;
+        if (sortValue !== 'default') {
+            const [keyString, order] = sortValue.split('_');
+            const datasetAttr = keyString.replace(/-\w/g, m => m[1].toUpperCase()); // Simplified camelCase
+            
+            if(datasetAttr){ 
+                filteredAndSortedListings.sort((a, b) => {
+                    let valA = a.dataset[datasetAttr]; let valB = b.dataset[datasetAttr];
+                    if (datasetAttr === 'creationDate') { valA = new Date(valA).getTime(); valB = new Date(valB).getTime(); } 
+                    else { valA = parseFloat(valA); valB = parseFloat(valB); }
+                    if (isNaN(valA)) return 1; if (isNaN(valB)) return -1; 
+                    let c = valA < valB ? -1 : (valA > valB ? 1 : 0);
+                    return order === 'asc' ? c : -c;
+                });
             }
         }
         
-        // If we made it through all the checks, it's a match!
-        return true;
+        currentPage = 1;
+        renderPage();
+    }
+    
+    function renderPage() {
+        const rowsPerPage = parseInt(rowsPerPageSelect.value, 10);
+        const totalItems = filteredAndSortedListings.length;
+        const totalPages = Math.ceil(totalItems / rowsPerPage) || 1;
+        currentPage = Math.min(currentPage, totalPages);
+
+        const startIndex = (currentPage - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        const itemsForCurrentPage = filteredAndSortedListings.slice(startIndex, endIndex);
+
+        originalListings.forEach(item => item.style.display = 'none');
+        itemsForCurrentPage.forEach(item => item.style.display = 'block');
+        
+        resultsCountEl.textContent = totalItems;
+        noResultsMessageEl.style.display = totalItems === 0 ? 'block' : 'none';
+        
+        paginationControls.innerHTML = '';
+        if (totalPages > 1) {
+            const prevButton = document.createElement('button'); prevButton.className = 'btn btn-sm'; prevButton.textContent = '«';
+            if (currentPage === 1) prevButton.disabled = true;
+            prevButton.addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderPage(); } });
+            paginationControls.appendChild(prevButton);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.className = `btn btn-sm ${i === currentPage ? 'btn-active' : ''}`;
+                pageButton.textContent = i;
+                pageButton.addEventListener('click', () => { currentPage = i; renderPage(); });
+                paginationControls.appendChild(pageButton);
+            }
+
+            const nextButton = document.createElement('button'); nextButton.className = 'btn btn-sm'; nextButton.textContent = '»';
+            if (currentPage === totalPages) nextButton.disabled = true;
+            nextButton.addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; renderPage(); } });
+            paginationControls.appendChild(nextButton);
+        }
     }
 
-    // Attach event listeners
     form.addEventListener('input', applyFiltersAndSort);
-    form.addEventListener('change', applyFiltersAndSort);
     sortSelect.addEventListener('change', applyFiltersAndSort);
-    resetFiltersButton.addEventListener('click', (e) => { 
-        e.preventDefault(); 
-        form.reset(); 
-        applyFiltersAndSort(); 
-    });
-
-    // Initial run on page load
+    rowsPerPageSelect.addEventListener('change', () => { currentPage = 1; renderPage(); });
+    resetFiltersButton.addEventListener('click', (e) => { e.preventDefault(); form.reset(); applyFiltersAndSort(); });
     applyFiltersAndSort();
 });
 </script>
